@@ -1,0 +1,1399 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Romford · Simple booking view</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: white app, brand-coloured header strip; Bookings and Suppliers use list (left) + detail (right); a save bar appears at the bottom when there are unsaved changes.
+   Single light theme by choice. --brand is a placeholder until the Romford logo colour is confirmed. */
+:root{
+  color-scheme:light;
+  --brand:#17365D; --brand-ink:#FFFFFF; --brand-soft:#E9EFF7; --brand-line:#C9D6E8;
+  --bg:#FFFFFF; --sunk:#F4F6F9; --ink:#14202E; --muted:#5B6878; --line:#E1E6ED;
+  --ok:#1D7A3D; --ok-soft:#E3F3E7; --warn:#8C5900; --warn-soft:#FBF0D9; --bad:#B42318; --bad-soft:#FDECEA;
+  /* confidential = violet; money owed to suppliers = orange */
+  --conf:#6B3FA0; --conf-soft:#F5F0FB; --conf-line:#DCCDEF; --owed:#B54708; --owed-soft:#FEF0E6;
+  /* service colours */
+  --svc-tour:#0F766E; --svc-flight:#0369A1; --svc-hotel:#BE185D; --svc-visa:#A16207; --svc-other:#475569;
+  --shadow:0 1px 2px rgba(20,32,46,.05),0 6px 18px rgba(20,32,46,.06);
+  --display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --body:"Figtree",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.45}
+.strip{height:5px;background:var(--brand)}
+.wrap{max-width:1240px;margin:0 auto;padding-block:18px 110px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:16px}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.stat b,.pl b,.kv b,.totline b,td.num{font-variant-numeric:tabular-nums}
+.mono,.fid{font-family:var(--mono);font-size:12px;letter-spacing:.02em}
+.muted{color:var(--muted)}
+small{font-size:12px}
+
+.top{display:flex;flex-wrap:wrap;gap:14px 24px;align-items:flex-end;justify-content:space-between}
+.word{font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--brand)}
+.brand h1{font-family:var(--display);font-size:26px;line-height:1.1;margin:2px 0 0;letter-spacing:-.01em;color:var(--brand);text-wrap:balance}
+.brand p{margin:4px 0 0;color:var(--muted)}
+.tag{display:inline-block;font-family:var(--body);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--warn);background:var(--warn-soft);padding:2px 8px;border-radius:999px;margin-left:8px;vertical-align:middle}
+.roles{display:flex;flex-wrap:wrap;gap:4px;background:var(--sunk);border:1px solid var(--line);padding:4px;border-radius:12px}
+.role{border:0;background:transparent;padding:7px 12px;border-radius:9px;cursor:pointer;text-align:left;color:var(--muted)}
+.role b{display:block;font-weight:600;font-size:14px}
+.role[aria-pressed="true"]{background:var(--brand);color:var(--brand-ink)}
+
+.tabs{display:flex;flex-wrap:wrap;gap:2px;border-bottom:1px solid var(--line)}
+.tab{border:0;background:none;padding:10px 14px;border-bottom:3px solid transparent;margin-bottom:-1px;cursor:pointer;color:var(--muted);font-weight:600;display:flex;gap:6px;align-items:center}
+.tab[aria-selected="true"]{color:var(--brand);border-color:var(--brand)}
+.badge{background:var(--bad);color:#FFFFFF;font-size:11px;border-radius:999px;padding:1px 7px;font-weight:700}
+.adminbar{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;background:var(--brand-soft);padding:9px 14px;border-radius:10px}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.stat{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.stat span{display:block;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.stat b{font-family:var(--display);font-size:20px;font-weight:600;color:var(--brand)}
+
+.main{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:880px){.main{grid-template-columns:minmax(0,1fr)}}
+.listhead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+.listhead h2,.group{font-size:12px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:0}
+.group{margin:8px 0 2px}
+.filters{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap}
+.fbtn{border:1px solid var(--line);background:var(--bg);border-radius:999px;padding:5px 12px;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted)}
+.fbtn[aria-pressed="true"]{background:var(--brand);border-color:var(--brand);color:var(--brand-ink)}
+.list{display:flex;flex-direction:column;gap:8px}
+.item{width:100%;text-align:left;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:11px 13px;cursor:pointer;display:flex;flex-direction:column;gap:3px}
+.item:hover{border-color:var(--brand-line)}
+.item[aria-current="true"]{border-color:var(--brand);box-shadow:0 0 0 1px var(--brand);background:var(--brand-soft)}
+.item .row1{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.item .nm{font-weight:600;font-size:15px}
+.item .ds{color:var(--muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .fig{display:flex;justify-content:space-between;font-size:13px;margin-top:4px;padding-top:6px;border-top:1px solid var(--line)}
+.item .fig span{color:var(--muted)}
+
+.chip{display:inline-flex;align-items:center;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
+.chip.ok{background:var(--ok-soft);color:var(--ok)}
+.chip.warn{background:var(--warn-soft);color:var(--warn)}
+.chip.bad{background:var(--bad-soft);color:var(--bad)}
+.chip.accent{background:var(--brand-soft);color:var(--brand)}
+.chip.plain{background:var(--sunk);color:var(--muted)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.btn{border:0;background:var(--brand);color:var(--brand-ink);padding:8px 14px;border-radius:8px;font-weight:600;cursor:pointer;white-space:nowrap}
+.btn.ghost{background:var(--bg);color:var(--brand);border:1px solid var(--brand)}
+.btn.danger{background:var(--bg);color:var(--bad);border:1px solid var(--bad)}
+.btn.small{padding:6px 11px;font-size:13px}
+.linkbtn{border:0;background:none;color:var(--brand);text-decoration:underline;cursor:pointer;padding:2px 0;font-size:13px;font-weight:600}
+.icon{border:1px solid var(--line);background:var(--bg);border-radius:6px;width:30px;height:30px;cursor:pointer;color:var(--muted);font-size:16px;line-height:1}
+.icon:hover{color:var(--bad);border-color:var(--bad)}
+
+.panel{background:var(--bg);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);min-width:0}
+.dhead{display:flex;flex-wrap:wrap;gap:10px 16px;justify-content:space-between;align-items:flex-start;padding:18px 20px 12px}
+.dhead h2{font-family:var(--display);font-size:24px;margin:2px 0;line-height:1.15;text-wrap:balance}
+.dhead p{margin:0}
+.steps{display:flex;gap:6px;padding:0 20px 16px;flex-wrap:wrap}
+.step{flex:1 1 110px;border-top:3px solid var(--line);padding-top:6px;font-size:12px;color:var(--muted);font-weight:500}
+.step.done{border-color:var(--brand);color:var(--ink)}
+.step.now{border-color:var(--warn);color:var(--ink)}
+.sec{border-top:1px solid var(--line);padding:16px 20px;display:flex;flex-direction:column;gap:12px}
+.sec:first-child{border-top:0}
+.sec h3{margin:0;font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--brand)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.fld{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fld.wide{grid-column:1/-1}
+.fld>span,.lbl{font-size:12px;color:var(--muted);font-weight:500}
+.fld input,.fld select,td input,td select,.addrow input,.addrow select,.payrow input{width:100%;background:var(--bg);border:1px solid #CBD3DE;border-radius:7px;padding:8px 10px;min-width:0;min-height:38px}
+.fld input:focus,.fld select:focus,td input:focus,td select:focus,.addrow input:focus{border-color:var(--brand);outline:2px solid var(--brand-soft);outline-offset:0}
+.fld input:disabled{opacity:.55;background:var(--sunk)}
+.fld.miss input,.fld.miss select{border-color:var(--bad);background:var(--bad-soft)}
+.fld.miss>span{color:var(--bad)}
+.fld output{display:block;padding:8px 0;font-weight:500;overflow-wrap:anywhere}
+.kv{display:flex;flex-direction:column;gap:4px;justify-content:flex-end}
+.kv span{font-size:12px;color:var(--muted);font-weight:500}
+.kv b{font-size:16px;padding:5px 0}
+.warnt{color:var(--warn)}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:9px;background:var(--bg)}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--sunk);white-space:nowrap}
+tbody tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right}
+td input.num{text-align:right}
+table.lines{min-width:680px}
+table.rec{min-width:620px}
+table.sch{min-width:720px}
+table.pay{min-width:680px}
+table.log{min-width:720px}
+table.bk{min-width:420px}
+td.emptyrow{color:var(--muted);text-align:center;padding:14px}
+tr.chg td{background:var(--warn-soft)}
+.addrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;align-items:center;background:var(--sunk);padding:10px;border-radius:9px}
+.tick{display:inline-flex;gap:8px;align-items:center;cursor:pointer;font-weight:500}
+.tick input{width:16px;height:16px;accent-color:var(--brand);flex:none}
+.knows{background:var(--brand-soft);padding:10px 12px;border-radius:9px;font-weight:600}
+.row{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+.seg{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px}
+.seg button,.svc{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:10px 12px;text-align:left;cursor:pointer}
+.seg button b,.svc b{display:block;font-weight:600}
+.seg button small,.svc small{color:var(--muted)}
+.seg button[aria-pressed="true"]{border-color:var(--brand);background:var(--brand-soft);box-shadow:0 0 0 1px var(--brand)}
+.seg button:disabled{cursor:default}
+.svcgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.svc{padding:16px}
+.svc b{font-family:var(--display);font-size:18px;color:var(--brand)}
+.svc:hover{border-color:var(--brand)}
+.pc{display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+.pc small{color:var(--muted)}
+.payrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.payrow input{width:170px}
+.payto{display:flex;flex-direction:column;font-size:13px;line-height:1.4}
+.payto b{font-weight:600}
+.payto small{color:var(--muted);margin-bottom:2px}
+.totline{display:flex;justify-content:flex-end;gap:14px;align-items:baseline;font-size:15px}
+.totline span{color:var(--muted)}
+.totline b{font-size:18px;font-family:var(--display)}
+.pl{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.pl>div{background:var(--sunk);border:1px solid var(--line);border-radius:9px;padding:10px 12px;display:flex;flex-direction:column}
+.pl span{font-size:12px;color:var(--muted);font-weight:500}
+.pl b{font-family:var(--display);font-size:19px;font-weight:600}
+.pl small{color:var(--muted)}
+.pl .m{background:#FFFFFF;border-color:var(--conf)}
+.pl .m b{color:var(--conf)}
+.pl.sub b{font-size:16px;font-family:var(--body)}
+.note{margin:0;padding:10px 12px;border-radius:8px;font-size:13px}
+.note.warn{background:var(--warn-soft);color:var(--warn)}
+.note.bad{background:var(--bad-soft);color:var(--bad)}
+.note.info{background:var(--brand-soft);color:var(--ink)}
+.draft{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between;background:var(--brand-soft);border:1px solid var(--brand-line);border-radius:10px;padding:12px 14px;margin:0 20px 14px}
+.draft p{margin:0;max-width:60ch}
+.draft ul{margin:6px 0 0;padding-left:18px;color:var(--bad)}
+.checks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:13px}
+.missbox{background:#FFFBF5}
+.mlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.mlist li{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:7px 0;border-bottom:1px dashed var(--line)}
+.mlist li:last-child{border-bottom:0}
+.allok{padding:0 20px 14px}
+.pending{border:1px solid var(--warn);background:var(--warn-soft);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.pending p{margin:0}
+.hist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.hist li{display:grid;grid-template-columns:minmax(0,150px) minmax(0,1fr);gap:4px 12px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}
+.hist li:last-child{border-bottom:0}
+.hist .when{color:var(--muted)}
+@media (max-width:520px){.hist li{grid-template-columns:minmax(0,1fr)}}
+.chgv{font-variant-numeric:tabular-nums}
+.chgv s{color:var(--muted)}
+.empty{padding:40px 20px;text-align:center;color:var(--muted)}
+.paysec{display:flex;flex-direction:column;gap:8px}
+.paysec h2{font-family:var(--display);font-size:18px;margin:6px 0 0;color:var(--brand)}
+.paysec p{margin:0;color:var(--muted)}
+.foot{color:var(--muted);font-size:13px;display:flex;flex-wrap:wrap;gap:8px 18px;justify-content:space-between;align-items:center;border-top:1px solid var(--line);padding-top:14px}
+.foot p{margin:0;max-width:70ch}
+
+#savebar{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--bg);border-top:2px solid var(--brand);box-shadow:0 -6px 18px rgba(20,32,46,.08);padding-block:12px calc(12px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+#savebar .in{max-width:1240px;margin:0 auto;display:flex;gap:10px 14px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
+#savebar .msg{margin-right:auto;font-weight:600}
+#savebar.flash .msg{color:var(--bad)}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:30;background:var(--ink);color:#FFFFFF;padding:10px 16px;border-radius:9px;font-weight:600;max-width:min(92vw,520px);text-align:center}
+/* list view */
+.listbar{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;justify-content:space-between}
+.listbar h2{font-family:var(--display);font-size:20px;margin:0;color:var(--brand)}
+.listtools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.search{border:1px solid #CBD3DE;border-radius:8px;padding:8px 12px;min-height:38px;width:240px;max-width:100%;background:var(--bg)}
+.search:focus{border-color:var(--brand);outline:2px solid var(--brand-soft);outline-offset:0}
+table.blist{min-width:640px}
+table.blist td{vertical-align:middle;padding:11px 12px}
+table.blist .fid,.nw{white-space:nowrap}
+table.blist th{padding:10px 12px}
+tr.rowlink{cursor:pointer}
+tr.rowlink:hover td{background:var(--brand-soft)}
+tr.rowlink:focus-visible{outline:2px solid var(--brand);outline-offset:-2px}
+.cname{font-weight:600}
+.sub{display:block;color:var(--muted);font-size:12px}
+.backrow{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.backbtn{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:7px 12px;cursor:pointer;font-weight:600;color:var(--brand)}
+.backbtn:hover{border-color:var(--brand)}
+.detailwrap{display:flex;flex-direction:column;gap:12px;max-width:1040px;width:100%;margin:0 auto}
+/* colour system */
+.sec.conf{background:var(--conf-soft);box-shadow:inset 4px 0 0 var(--conf)}
+.sec.conf h3{color:var(--conf)}
+.conftag{display:inline-flex;align-items:center;gap:4px;margin-left:8px;padding:1px 8px;border-radius:999px;background:var(--conf);color:#FFFFFF;font-size:10px;letter-spacing:.06em;vertical-align:middle}
+th.conf{background:var(--conf-soft);color:var(--conf)}
+td.conf{background:var(--conf-soft)}
+tr.rowlink:hover td.conf{background:#EADFF7}
+.stat.conf{background:var(--conf-soft);border-color:var(--conf-line)}
+.stat.conf span,.stat.conf b{color:var(--conf)}
+.owed{color:var(--owed)}
+.okt{color:var(--ok)}
+.chip.owed{background:var(--owed-soft);color:var(--owed)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:1px;background:var(--svc-other)}
+.dot.tour{background:var(--svc-tour)}.dot.flight{background:var(--svc-flight)}.dot.hotel{background:var(--svc-hotel)}.dot.visa{background:var(--svc-visa)}.dot.other{background:var(--svc-other)}
+.legend{border:1px solid var(--line);border-radius:10px;background:var(--sunk);font-size:13px}
+.legend summary{cursor:pointer;padding:9px 14px;font-weight:600;color:var(--brand)}
+.lg{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px 22px;padding:4px 14px 14px}
+.lg h4{margin:0 0 6px;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.lg ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px}
+.sw{display:inline-block;width:14px;height:14px;border-radius:4px;vertical-align:-2px;margin-right:6px;border:1px solid var(--conf-line);background:var(--conf-soft)}
+.exp{display:flex;gap:6px;flex-wrap:wrap}
+.exp .btn:disabled{opacity:.5;cursor:not-allowed}
+.confbanner{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;background:var(--conf);color:#FFFFFF;border-radius:10px;padding:10px 16px}
+.confbanner b{font-family:var(--display);font-size:18px}
+.confbanner span{opacity:.9;font-size:13px}
+.bars{display:flex;flex-direction:column;gap:8px}
+.bar{display:grid;grid-template-columns:minmax(0,130px) minmax(0,1fr) minmax(0,150px);gap:10px;align-items:center;font-size:13px}
+.bar .tr{background:var(--sunk);border-radius:5px;height:14px;overflow:hidden}
+.bar .fl{height:100%;border-radius:5px;background:var(--conf)}
+.bar .vl{text-align:right;font-variant-numeric:tabular-nums}
+.cards2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.card{border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;background:var(--bg)}
+.card h3{margin:0;font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--conf)}
+table.profit{min-width:720px}
+table.profit td{vertical-align:middle}
+table.profit .fid{white-space:nowrap}
+[hidden]{display:none!important}
+.selsm{border:1px solid #CBD3DE;border-radius:8px;padding:7px 10px;min-height:38px;background:var(--bg)}
+/* accordions: simple view first, "More" for detail */
+details.sec.acc{display:block;padding:0}
+details.acc>summary,details.pgsec>summary{list-style:none;cursor:pointer;display:flex;flex-wrap:wrap;align-items:center;gap:4px 14px;padding:14px 20px}
+details.acc>summary::-webkit-details-marker,details.pgsec>summary::-webkit-details-marker,.bankd>summary::-webkit-details-marker{display:none}
+details.acc>summary:hover,details.pgsec>summary:hover{background:rgba(23,54,93,.03)}
+.at{font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--brand)}
+details.acc.conf .at{color:var(--conf)}
+.as{color:var(--muted);font-size:13px;flex:1 1 220px;min-width:0}
+.as b{font-weight:600}
+.more{margin-left:auto;font-size:12px;font-weight:600;color:var(--brand);white-space:nowrap}
+.more::after{content:"More ▾"}
+details[open]>summary .more::after{content:"Less ▴"}
+.ab{padding:0 20px 18px;display:flex;flex-direction:column;gap:12px}
+details.pgsec{border:1px solid var(--line);border-radius:12px;background:var(--bg)}
+details.pgsec>summary{padding:12px 16px}
+.ptitle{font-family:var(--display);font-size:17px;font-weight:600;color:var(--brand)}
+details.pgsec>.pb{padding:0 16px 16px;display:flex;flex-direction:column;gap:10px}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;padding:0 20px 14px}
+.facts div{background:var(--sunk);border-radius:9px;padding:8px 12px;display:flex;flex-direction:column}
+.facts div>span{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.facts b{font-size:15px;font-variant-numeric:tabular-nums}
+.morebtn{border:1px dashed var(--brand-line);background:var(--bg);color:var(--brand);font-weight:600;cursor:pointer;text-align:center;display:flex;align-items:center;justify-content:center}
+.morebtn:hover{border-color:var(--brand)}
+.bankd>summary{list-style:none;cursor:pointer;font-size:12px;font-weight:600;color:var(--brand);margin-top:4px}
+.bankd[open]>summary{margin-bottom:4px}
+table.cash{min-width:760px}
+table.cash td{vertical-align:middle}
+.amt-in{color:var(--ok);font-weight:600}
+.amt-out{color:var(--owed);font-weight:600}
+/* today page */
+.hello{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;justify-content:space-between}
+.hello h2{font-family:var(--display);font-size:22px;margin:0;color:var(--brand)}
+.stepn{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--brand);color:#FFFFFF;font-family:var(--body);font-size:13px;font-weight:700;margin-right:10px;vertical-align:2px}
+table.todo{min-width:640px}
+table.todo td{vertical-align:middle}
+.invrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.invrow input[type=text]{border:1px solid #CBD3DE;border-radius:7px;padding:7px 9px;min-height:36px;width:150px}
+.tab.sec2{font-weight:500;font-size:13px}
+.tab.sec2.first{margin-left:auto}
+.newsup{border:1px dashed var(--brand-line);background:var(--brand-soft)}
+/* rules */
+.rulelist{display:flex;flex-direction:column}
+.rule{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.rule:last-child{border-bottom:0}
+.rule b{display:block;font-weight:600}
+.rule small{color:var(--muted)}
+.switch{appearance:none;-webkit-appearance:none;width:44px;height:24px;border-radius:999px;background:#CBD3DE;position:relative;flex:none;cursor:pointer;margin:0}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#FFFFFF;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.switch:checked{background:var(--brand)}
+.switch:checked::after{left:23px}
+.always{columns:2 260px;margin:0;padding-left:18px;font-size:13px}
+@media (prefers-reduced-motion: no-preference){.item,.seg button,.role,.svc,.fbtn{transition:border-color .15s,box-shadow .15s,background .15s}.switch::after{transition:left .15s}}
+</style>
+
+<style>
+/* Simple review layout: retain the v5 workflow and save/discard behavior. */
+:root{--display:system-ui,-apple-system,"Segoe UI",sans-serif;--body:system-ui,-apple-system,"Segoe UI",sans-serif;--shadow:none}
+body{background:#f6f8fb;font-size:14px;line-height:1.5}
+.wrap{max-width:1120px;gap:18px;padding-top:24px}
+.top{align-items:center;gap:16px}.brand h1{font-size:25px;letter-spacing:-.7px}.brand p{font-size:13px;margin-top:7px}.word{font-size:10px;letter-spacing:.14em}.tag{font-size:9px;padding:2px 6px;margin-left:6px;background:#eef2f7;color:#657386}
+.roles{background:transparent;border:0;padding:0;border-radius:0}.preview-role{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--muted)}.preview-role select{background:white;border:1px solid var(--line);border-radius:8px;padding:8px 30px 8px 10px;font-size:13px;font-weight:600;color:var(--brand);min-height:38px}
+.tabs{background:white;border:1px solid var(--line);border-radius:10px;padding:5px;gap:3px;overflow-x:auto;flex-wrap:nowrap}.tab{font-size:12px;padding:8px 11px;border:0;margin:0;border-radius:6px;white-space:nowrap;flex:none}.tab[aria-selected="true"]{background:var(--brand-soft)}.tab.sec2{margin-left:0}.tab.first::before{display:none}.badge{font-size:10px;padding:0 5px}
+.stats{grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px}.stat{padding:12px 15px;border-radius:10px;background:white}.stat span{font-size:11px;letter-spacing:0;text-transform:none;font-weight:500}.stat b{font-size:21px;margin-top:2px;display:block;line-height:1.5}.stat.morebtn{font-size:12px;display:flex;align-items:center;justify-content:center;min-height:52px;background:transparent;border-style:dashed;color:var(--muted)}
+.listbar{gap:12px}.listbar h2{font-size:18px}.listtools{gap:8px}.search{width:240px;font-size:13px}.btn{padding:9px 14px;font-size:13px;border-radius:7px}.btn.small{font-size:12px;padding:7px 11px}.fbtn{font-size:12px;padding:6px 11px}.linkbtn{font-size:12px;text-decoration:none}.linkbtn:hover{text-decoration:underline}
+.tbl{background:white;border-radius:11px}.blist th{font-size:10px;letter-spacing:.04em;padding:12px!important}.blist td{padding:13px 12px!important;font-size:13px}.cname{font-size:14px}.sub{font-size:11px;margin-top:3px}.chip{font-family:var(--body);font-size:10px!important;line-height:1.3;font-weight:600;padding:3px 7px!important;border-radius:5px;letter-spacing:0;white-space:normal;max-width:200px}.chips{gap:5px}.conftag{font-size:8px;padding:2px 6px;letter-spacing:.03em}.fid{font-size:10px}.dot{width:7px;height:7px}
+.panel{border-radius:12px;background:white}.dhead{padding:18px}.dhead h2{font-size:22px}.dhead p{font-size:13px}.steps{padding:0 18px 15px;gap:12px}.step{font-size:11px;border-top-width:2px}.sec{padding:15px 18px;gap:12px}.sec h3{font-size:11px;letter-spacing:.03em}.sec.conf{background:#faf7fd;box-shadow:inset 2px 0 0 var(--conf)}
+.acc>summary{padding-top:0;padding-bottom:0}.at{font-size:13px!important;text-transform:none!important;letter-spacing:0!important}.as{font-size:12px!important;font-weight:400!important}.ab{padding-top:14px}.acc .more{font-size:12px}.grid{gap:12px 16px}.fld>span,.lbl{font-size:12px}.fld input,.fld select,td input,td select{font-size:13px;min-height:38px}.kv b{font-size:15px}.note{font-size:12px;padding:9px 11px}.draft{font-size:12px;margin:0 18px 14px}.draft p{max-width:65ch}.pl b{font-size:18px}.pl span{font-size:11px}.totline{font-size:13px}.totline b{font-size:17px}
+.legend{background:transparent;border:0;border-top:1px solid var(--line);border-radius:0;color:var(--muted);margin-top:4px}.legend summary{font-size:11px;padding:10px 0;font-weight:500}.lg{font-size:11px;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));padding:3px 0 12px;gap:16px}.lg h4{font-size:10px;letter-spacing:0}.lg .chip{font-size:10px!important}.lg li{line-height:1.6}
+.hello h2{font-size:20px;letter-spacing:-.3px;margin:0 0 4px}.hello>span{font-size:12px}.stepn{width:23px;height:23px;font-size:11px}.pgsec .as,.pgsec .as .okt{font-size:12px!important;font-weight:500}.paysec h2{font-size:17px}.paysec p{font-size:12px}.pgsec{background:white;border-radius:10px}.ptitle{font-size:14px!important}.tasknum{font-size:12px}.confbanner{padding:10px 14px;background:#f2ecf9;color:var(--conf);border:1px solid var(--conf-line)}.confbanner b{font-size:16px}.confbanner span{font-size:11px}.foot{font-size:11px;padding-top:12px}.foot p{max-width:none}#savebar{border-top-width:1px}#savebar .msg{font-size:13px}
+@media(max-width:700px){.wrap{padding-top:16px;gap:14px}.top{align-items:flex-start}.brand h1{font-size:22px}.brand p{font-size:12px;max-width:240px}.preview-role{flex-direction:column;align-items:flex-start;gap:3px;font-size:10px}.preview-role select{font-size:12px;padding-right:10px;max-width:130px}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.stat{padding:10px 12px}.stat b{font-size:19px}.listtools{width:100%}.search{flex:1;min-width:160px}.listtools .filters{width:100%}.listbar h2{font-size:17px}.sec{padding:13px}.dhead{padding:14px}.dhead h2{font-size:20px}.steps{padding-left:14px;padding-right:14px}.as{max-width:100%;white-space:normal}.chip{max-width:150px}.lg{grid-template-columns:1fr 1fr}table.blist{min-width:550px}}
+@media print{body{background:white}.preview-role,.foot,#savebar{display:none!important}}
+</style>
+<div class="strip"></div>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="word">Romford Holidays</div>
+      <h1>Bookings <span class="tag">On this PC</span></h1>
+      <p>Find a client. Open their booking. Complete the next task.</p>
+    </div>
+    <div class="roles" id="roles" role="group" aria-label="View as"></div>
+  </header>
+  <nav class="tabs" id="tabs" role="tablist"></nav>
+  <div id="adminbar"></div>
+  <div class="stats" id="stats"></div>
+  <main id="view"></main>
+  <footer class="foot">
+    <p>Records are saved in this browser. Keep this folder in the same location and download regular backups.</p>
+    <div class="row"><button class="btn ghost small" id="backup-local">Download backup</button><button class="btn ghost small" id="restore-local">Restore backup</button><input type="file" id="backup-file" accept=".json,application/json" hidden></div>
+  </footer>
+</div>
+<div id="savebar" hidden><div class="in"><span class="msg" id="sbmsg">You have unsaved changes</span><button class="btn ghost small" data-act="discard">Discard</button><button class="btn small" data-act="saveAll">Save changes</button></div></div>
+<div id="toast" role="status" hidden></div>
+
+<script src="assets/xlsx.js"></script>
+<script src="assets/jspdf.js"></script>
+<script src="assets/autotable.js"></script>
+<script>
+(function(){
+const KEY="romford-bookings-pc-v1";
+const RULES=[
+  ["ownOnly","See only their own bookings","Off: Sales can open every submitted booking.",true],
+  ["enterDmc","Enter the DMC and net rate","Shows the “I know the DMC and the net rate” tick on tour and hotel bookings.",true],
+  ["flightNet","Enter portal, PNR and net fare on portal flights","For flights the staff book themselves on Akbar, Riya, TBO etc.",true],
+  ["seeSupplier","See the supplier / DMC name","Read-only, on every booking they can open.",false],
+  ["seeCost","See the supplier cost (net rate)","Read-only, on every booking they can open.",false],
+  ["seeMarkup","See the markup","Read-only, on every booking they can open.",false],
+  ["editAfter","Edit client and trip details after submitting","Off: details lock once the booking is submitted.",true],
+  ["editPriceAfter","Change the price after submitting","Off: only Accounts can change the price once submitted.",false],
+  ["seeHistory","See the change history of their bookings","Who changed what, and when.",false],
+  ["canExport","Export their booking list to Excel or PDF","Only the columns Sales can see are exported.",true]
+];
+const defaultRules=()=>Object.fromEntries(RULES.map(r=>[r[0],r[3]]));
+const ROLES={sales:{label:"Sales",who:"Arjun"},res:{label:"Reservations",who:"Reservation Head"},ops:{label:"Operations",who:"Salahu"},accounts:{label:"Accounts",who:"Accountant"},admin:{label:"Admin",who:"Shahinsha"}};
+const SERVICES={
+  tour:{label:"Tour package",hint:"Through a DMC or self-made",title:"Package price"},
+  flight:{label:"Flight",hint:"Portal fare or group fare",title:"Ticket price to client"},
+  hotel:{label:"Hotel",hint:"Stay only",title:"Hotel price to client"},
+  visa:{label:"Visa",hint:"Visa application",title:"Visa price to client"},
+  other:{label:"Other",hint:"Insurance, transfers, forex",title:"Price to client"}
+};
+const TRIP={
+  tour:[["dest","Destination","text"],["start","Travel from","date"],["end","Travel to","date"],["pax","No. of people","number"]],
+  flight:[["tripType","Trip type","select",["One way","Return","Multi-city"]],["from","From","text"],["to","To","text"],["depart","Departure date","date"],["ret","Return date","date"],["airline","Airline","text"],["pax","No. of passengers","number"],["paxNames","Passenger names (as on passport)","text","wide"]],
+  hotel:[["hotel","Hotel name","text"],["city","City","text"],["checkin","Check-in","date"],["checkout","Check-out","date"],["rooms","Rooms","number"],["pax","Guests","number"]],
+  visa:[["country","Country","text"],["visaType","Visa type","text"],["pax","No. of applicants","number"],["appt","Appointment date","date"]],
+  other:[["desc","What is it","text","wide"],["start","Date","date"],["pax","No. of people","number"]]
+};
+const REQ={tour:{block:["dest","start","end","pax"],soft:[]},flight:{block:["from","to","depart","pax"],soft:["ret","paxNames"]},hotel:{block:["hotel","city","checkin","checkout"],soft:["rooms"]},visa:{block:["country","visaType","pax"],soft:["appt"]},other:{block:["desc"],soft:[]}};
+const SINGLE={
+  dmc:{sup:"DMC",types:["DMC"],ref:"DMC confirmation no.",net:"Net price (B2B)"},
+  portal:{sup:"Booking portal",types:["Flight portal"],ref:"PNR",net:"Net fare (B2B)"},
+  group:{sup:"Group fare from",types:["Airline / group fare","Flight portal"],ref:"Group PNR",net:"Group net fare (B2B)"},
+  hotel:{sup:"Hotel / supplier",types:["Hotel / online","DMC","Other"],ref:"Confirmation no.",net:"Net cost (B2B)"}
+};
+const CATS=["Flights","Hotels / Airbnb","Car rental","Trains / ferries / transfers","Sightseeing & tickets","Guide / driver","Visa fees","Travel insurance","SIM / eSIM","Card / forex / bank charges","Other"];
+const SUPTYPES=["DMC","Flight portal","Airline / group fare","Hotel / online","Car rental","Visa","Insurance","Other"];
+const PAYBY=["Bank transfer","Portal wallet","Card / online"];
+const MODES=["UPI","Bank transfer","Cash","Card / Razorpay"];
+const BANKF=[["accName","Account name"],["bank","Bank"],["accNo","Account no. / IBAN"],["code","IFSC / SWIFT"]];
+const ISSUERS=["Booking staff","Reservation Head","In-charge (Reservation Head not available)"];
+
+function P(o){return Object.assign({st:"open"},o||{})}
+function seed(){return {opsSeeSell:false,rules:defaultRules(),suppliers:[],files:[],log:[]};}
+function load(){try{const v=localStorage.getItem(KEY);return v?JSON.parse(v):null}catch(e){return null}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){alert("This browser could not save your records. Download a backup before closing this page.");throw e;}}
+let S=load()||seed();
+S.rules=Object.assign(defaultRules(),S.rules||{});
+let role="admin",tab="today",sel=null,selSup=null,newMode=false,bankEdit=null,listFilter="all",submitErr=null,open=false,q="",profitSvc="all";
+let moreCols=false,moreStats=false,moreProfit=false,logAll=false,cbType="all",cbMonth="all",openSecs={},draftView=false;
+/* where you stopped: per role + tab, saved in this browser */
+const NAVKEY=KEY+"-nav";
+let V={},navFrom=null,lastTab={};
+function vk(){return role+":"+tab}
+function stash(){const prev=V[vk()]||{};V[vk()]={open,sel,from:navFrom,scroll:window.scrollY,listScroll:open?(prev.listScroll||0):window.scrollY};lastTab[role]=tab}
+function unstash(){const v=V[vk()]||{};open=!!v.open;if(v.sel)sel=v.sel;navFrom=v.from||null;newMode=false;bankEdit=null;submitErr=null;return v.scroll||0}
+function persistNav(){const cv=V[vk()]=V[vk()]||{};if(!newMode){cv.open=open;cv.sel=sel;cv.from=navFrom}lastTab[role]=tab;try{localStorage.setItem(NAVKEY,JSON.stringify({role,tab,V,lastTab,listFilter,q,profitSvc,cbType,cbMonth,moreCols,moreStats,moreProfit,openSecs,selSup}))}catch(e){}}
+function restoreNav(){try{const n=JSON.parse(localStorage.getItem(NAVKEY)||"null");if(!n)return 0;role=ROLES[n.role]?n.role:"sales";tab=n.tab||"bookings";V=n.V||{};lastTab=n.lastTab||{};listFilter=n.listFilter||"all";q=n.q||"";profitSvc=n.profitSvc||"all";cbType=n.cbType||"all";cbMonth=n.cbMonth||"all";moreCols=!!n.moreCols;moreStats=!!n.moreStats;moreProfit=!!n.moreProfit;openSecs=n.openSecs||{};selSup=n.selSup||null;return unstash()}catch(e){return 0}}
+function go(y){requestAnimationFrame(()=>window.scrollTo(0,y||0))}
+let scT=null;window.addEventListener("scroll",()=>{clearTimeout(scT);scT=setTimeout(()=>{if(!newMode){stash();persistNav()}},250)},{passive:true});
+const DEFAULT_OPEN={sales:["missing","trip"],res:["missing","ticket"],ops:["cost","pay-open"],accounts:["acct","pay-appr"],admin:["acct","pay-appr"]};
+function isOpenSec(id,force){const o=openSecs[role]||{};if(id in o)return o[id];if(force)return true;if(draftView&&["trip","pay","knows"].includes(id))return true;return(DEFAULT_OPEN[role]||[]).includes(id)}
+function accOpen(id,title,sub,cls,force){return`<details class="sec acc${cls?" "+cls:""}" data-sec="${id}" ${isOpenSec(id,force)?"open":""}><summary><span class="at">${title}${cls&&cls.indexOf("conf")>-1?confTag:""}</span><span class="as">${sub||""}</span><span class="more" aria-hidden="true"></span></summary><div class="ab">`}
+const accClose="</div></details>";
+function pgSec(id,title,sub,body,dflt){return`<details class="pgsec" data-sec="${id}" ${isOpenSec(id,dflt)?"open":""}><summary><span class="ptitle">${title}</span><span class="as">${sub||""}</span><span class="more" aria-hidden="true"></span></summary><div class="pb">${body}</div></details>`}
+let sumClick=0;document.addEventListener("click",e=>{if(e.target.closest&&e.target.closest("summary"))sumClick=Date.now()},true);
+document.addEventListener("toggle",e=>{const d=e.target;if(d&&d.matches&&d.matches("details[data-sec]")&&Date.now()-sumClick<1500){(openSecs[role]=openSecs[role]||{})[d.dataset.sec]=d.open;persistNav()}},true);
+const DL={async save({filename,data}){const u=URL.createObjectURL(data);const a=document.createElement("a");a.href=u;a.download=filename;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),10000);return{status:"saved"}}};
+function syncExport(){document.querySelectorAll("[data-act=export]").forEach(b=>{b.disabled=false;b.title="Download this report"})}
+const confTag='<span class="conftag" aria-label="Confidential">CONFIDENTIAL</span>';
+function band(pct){if(pct==null||!isFinite(pct))return'<span class="muted">—</span>';const t=pct<0.08?"bad":(pct<0.15?"warn":"ok");return chip((pct*100).toFixed(1)+"%",t)}
+function dot(svc){return`<span class="dot ${svc}" aria-hidden="true"></span>`}
+function expBtns(kind){if(role==="sales"&&!R().canExport)return"";return`<div class="exp"><button class="btn ghost small" data-act="export" data-kind="${kind}" data-fmt="xlsx" ${DL?"":"disabled"}>Export Excel</button><button class="btn ghost small" data-act="export" data-kind="${kind}" data-fmt="pdf" ${DL?"":"disabled"}>Export PDF</button></div>`}
+function legendHtml(){
+  return`<details class="legend"><summary>Colour guide</summary><div class="lg">
+    <div><h4>Status</h4><ul><li>${chip("Done","ok")}</li><li>${chip("Approved","accent")}</li><li>${chip("Waiting","warn")}</li><li>${chip("Needs attention","bad")}</li><li>${chip("Draft","plain")}</li></ul></div>
+    <div><h4>Money</h4><ul><li><b class="okt">Green</b> received from the client</li><li><b class="warnt">Amber</b> still to collect from the client</li><li><b class="owed">Orange</b> still owed to suppliers</li>${isAcc()?`<li><span class="sw"></span><b style="color:var(--conf)">Violet</b> confidential: cost, markup, supplier</li>`:""}</ul></div>
+    ${isAcc()?`<div><h4>Markup</h4><ul><li>${chip("15% and above","ok")} good</li><li>${chip("8% to 15%","warn")} normal</li><li>${chip("Below 8%","bad")} low, check the price</li></ul></div>`:""}
+    <div><h4>Service</h4><ul>${Object.entries(SERVICES).map(([k,s])=>`<li>${dot(k)}${s.label}</li>`).join("")}</ul></div>
+  </div></details>`;
+}
+
+const $=s=>document.querySelector(s);
+const esc=v=>String(v==null?"":v).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const inr=n=>(n==null||n===""||isNaN(n))?"—":"₹"+Math.round(+n).toLocaleString("en-IN");
+const fdate=s=>{if(!s)return"—";const d=new Date(String(s).length<=10?s+"T00:00:00":s);return isNaN(d)?s:d.toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"})};
+const ftime=s=>{const d=new Date(s);return isNaN(d)?s:d.toLocaleString("en-IN",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})};
+const chip=(t,tone)=>`<span class="chip ${tone}">${esc(t)}</span>`;
+const today=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
+const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+const who=()=>ROLES[role].who;
+const supById=id=>S.suppliers.find(s=>s.id===id)||null;
+const supName=id=>{const s=supById(id);return s?s.name:"—"};
+const sum=(a,fn)=>a.reduce((t,x)=>t+(+fn(x)||0),0);
+const isEmpty=v=>v==null||v===""||v===0;
+function log(tid,tl,field,from,to){S.log.push({t:new Date().toISOString(),who:who(),role:ROLES[role].label,tid,tl,field,from,to})}
+let toastT=null;
+function toast(msg){const t=$("#toast");t.textContent=msg;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>{t.hidden=true},3200)}
+
+/* ---------- permissions ---------- */
+const isAcc=()=>role==="accounts"||role==="admin";
+const isFlight=f=>f.service==="flight";
+const isGroup=f=>isFlight(f)&&f.fareType==="group";
+const R=()=>S.rules;
+const can={
+  editTrip:f=>isAcc()||(role==="sales"&&(!f.submitted||R().editAfter))||(role==="res"&&isFlight(f)),
+  editPrice:f=>isAcc()||(isGroup(f)?role==="res":((role==="sales"&&(!f.submitted||R().editPriceAfter))||(role==="res"&&isFlight(f)))),
+  addReceipt:f=>isAcc()||(isGroup(f)?role==="res":(role==="sales"||(role==="res"&&isFlight(f)))),
+  seeReceipts:()=>role!=="ops",
+  seeSell:()=>role!=="ops"||S.opsSeeSell,
+  seeCost:f=>role==="ops"||isAcc()||(role==="res"&&isFlight(f))||(role==="sales"&&isFlight(f)&&!isGroup(f)&&R().flightNet),
+  editCostBase:f=>isAcc()||role==="ops"||(role==="res"&&isFlight(f))||(role==="sales"&&isFlight(f)&&!isGroup(f)&&R().flightNet),
+  editTicket:f=>isAcc()||role==="res"||(role==="sales"&&!isGroup(f)),
+  seeSchedule:f=>role==="ops"||isAcc()||(role==="res"&&isFlight(f)),
+  editSchedule:()=>role==="ops"||isAcc(),
+  approve:()=>role==="ops"||role==="admin",
+  pay:()=>role==="accounts",
+  verify:()=>isAcc(),
+  seeLog:()=>isAcc(),
+  editSupplier:()=>role==="ops"||isAcc(),
+  fixMissing:f=>role==="sales"||(role==="res"&&isFlight(f))
+};
+function itemLocked(f,itemId){return f.schedule.some(x=>x.item===itemId&&x.pay.st!=="open")}
+function canEditItem(f,itemId){return can.editCostBase(f)&&(isAcc()||!itemLocked(f,itemId))}
+function tabsFor(){
+  if(role==="sales"||role==="res")return[];
+  const t=[];
+  if(isAcc())t.push(["today","Today"]);
+  t.push(["bookings","Bookings"],["payments","Supplier payments"]);
+  if(isAcc())t.push(["cash","Money in & out"],["profit","Profit & markup"]);
+  t.push(["suppliers","DMCs & suppliers"]);
+  if(isAcc())t.push(["log","Change log",1]);
+  if(role==="admin")t.push(["rules","Access rules",1]);
+  return t;
+}
+function visible(){return S.files.filter(f=>{
+  if(!f.submitted)return f.createdBy===who();
+  if(role==="sales")return R().ownOnly?f.owner==="Arjun":true;
+  if(role==="res")return isFlight(f);
+  return true;
+})}
+function cur(){return visible().find(f=>f.id===sel)||null}
+
+/* ---------- model helpers ---------- */
+function singleCfg(f){if(f.service==="tour")return SINGLE.dmc;if(isFlight(f))return f.fareType==="group"?SINGLE.group:SINGLE.portal;return SINGLE.hotel}
+function summary(f){
+  switch(f.service){
+    case"flight":return[(f.from||"?")+" → "+(f.to||"?"),f.fareType==="group"?"Group fare":"Portal fare",f.pax?f.pax+" pax":""].filter(Boolean).join(" · ");
+    case"hotel":return[f.hotel,f.city].filter(Boolean).join(", ")||"Hotel";
+    case"visa":return(f.country?f.country+" ":"")+(f.visaType||"visa");
+    case"other":return f.desc||"Other service";
+    default:return f.dest||"Destination not set";
+  }
+}
+function tripLabel(f,k){const t=TRIP[f.service].find(x=>x[0]===k);return t?t[1]:k}
+function missing(f){
+  const out=[],grp=isGroup(f);
+  if(isEmpty(f.client))out.push({k:"client",label:isFlight(f)?"Lead passenger / group name":"Client name",block:true});
+  if(isEmpty(f.mobile))out.push({k:"mobile",label:"Mobile",block:true});
+  REQ[f.service].block.forEach(k=>{if(isEmpty(f[k]))out.push({k,label:tripLabel(f,k),block:true})});
+  if(!grp&&!(+f.sell>0))out.push({k:"sell",label:SERVICES[f.service].title,block:true});
+  if(isEmpty(f.address))out.push({k:"address",label:"Address"});
+  REQ[f.service].soft.forEach(k=>{if(k==="ret"&&f.tripType!=="Return")return;if(isEmpty(f[k]))out.push({k,label:tripLabel(f,k)})});
+  if(f.service==="tour"&&f.start&&f.end&&f.end<f.start)out.push({k:"end",label:"Travel to is before Travel from",block:true});
+  if(!grp&&!f.receipts.length)out.push({k:null,target:"nr-amt",label:"Advance payment"});
+  return out;
+}
+function openReqs(f){return(f.requests||[]).filter(r=>!r.done)}
+function missCount(f){return missing(f).length+openReqs(f).length}
+function itemsOf(f){
+  if(f.costMode==="single"){const s=f.single,cfg=singleCfg(f);return[{id:"s",sup:s.sup,amount:(s.pending||!(+s.net))?null:+s.net,label:cfg.sup+(s.ref?" · "+s.ref:"")}]}
+  return f.lines.map(l=>({id:l.id,sup:l.sup,amount:+l.amount||0,label:l.cat+(l.ref?" · "+l.ref:"")}));
+}
+function itemOf(f,id){return itemsOf(f).find(x=>x.id===id)||null}
+function calc(f){
+  const recV=sum(f.receipts.filter(r=>r.verified),r=>r.amount),recU=sum(f.receipts.filter(r=>!r.verified),r=>r.amount);
+  const items=itemsOf(f);
+  const pending=f.costMode==="single"?items[0].amount==null:!f.lines.length;
+  const cost=pending?null:sum(items,x=>x.amount);
+  const paid=sum(f.schedule.filter(x=>x.pay.st==="paid"),x=>x.amount);
+  const toPay=sum(f.schedule.filter(x=>x.pay.st==="approved"),x=>x.amount);
+  const toApprove=f.schedule.filter(x=>x.pay.st==="open").length;
+  const unsched=sum(items,it=>Math.max(0,(it.amount||0)-sum(f.schedule.filter(x=>x.item===it.id),x=>x.amount)));
+  const overdue=f.schedule.filter(x=>x.pay.st!=="paid"&&x.due&&x.due<today()).length;
+  const sell=+f.sell||0;
+  return{recV,recU,pending,cost,paid,toPay,toApprove,unsched,overdue,sell,supDue:cost==null?null:cost-paid,margin:cost==null?null:sell-cost,balance:sell-recV};
+}
+function status(f,c){
+  if(!f.submitted)return["Draft","plain",-1];
+  if(!f.receipts.length)return["No advance yet","bad",0];
+  if(c.recV===0)return["Check payment","warn",0];
+  if(c.pending){
+    if(!can.seeCost(f))return["Confirmed","accent",1];
+    return[(f.costMode==="single"&&f.single.pending)?"Proceeding · net price pending":"Awaiting supplier cost","warn",1];
+  }
+  if(!f.invoiceNo)return["Invoice needed","accent",2];
+  if(c.balance>0||c.supDue>0)return["Balance due","accent",3];
+  return["Closed","ok",4];
+}
+
+/* ---------- small renderers ---------- */
+function idOf(p){return"x-"+p.replace(/[^a-zA-Z0-9]/g,"-")}
+function fld(label,p,val,type,editable,o){
+  o=o||{};const cls="fld"+(o.wide?" wide":"")+(o.miss&&editable?" miss":"");
+  if(editable){
+    const v=val==null?"":val,attrs=[`id="${idOf(p)}"`,`data-p="${p}"`,`data-o="${esc(v)}"`,`data-lab="${esc(o.lab||label)}"`];
+    if(type==="number")attrs.push("data-num",'min="0"');
+    if(o.money)attrs.push("data-money",'step="any"');
+    if(o.disabled)attrs.push("disabled");
+    if(o.ph)attrs.push(`placeholder="${esc(o.ph)}"`);
+    if(o.list)attrs.push(`list="${o.list}"`);
+    return`<label class="${cls}" for="${idOf(p)}"><span>${label}</span><input type="${type}" value="${esc(v)}" ${attrs.join(" ")}></label>`;
+  }
+  let d=(val==null||val==="")?"—":val;
+  if(type==="date")d=fdate(val);else if(o.money)d=inr(val);
+  return`<div class="${cls}"><span>${label}</span><output>${esc(d)}</output></div>`;
+}
+function selFld(label,p,val,opts,editable,o){
+  o=o||{};
+  if(!editable){const m=opts.find(x=>x[0]===val);return`<div class="fld"><span>${label}</span><output>${esc(m&&val!==""?m[1]:"—")}</output></div>`}
+  return`<label class="fld" for="${idOf(p)}"><span>${label}</span><select id="${idOf(p)}" data-p="${p}" data-o="${esc(val)}" data-lab="${esc(o.lab||label)}" ${o.sup?"data-sup":""}>${opts.map(x=>`<option value="${esc(x[0])}" ${x[0]===val?"selected":""}>${esc(x[1])}</option>`).join("")}</select></label>`;
+}
+function tickBox(id,p,checked,lab,text,cls){return`<label class="tick${cls?" "+cls:""}"><input type="checkbox" id="${id}" data-p="${p}" data-o="${checked?1:0}" data-lab="${esc(lab)}" ${checked?"checked":""}> ${text}</label>`}
+function supOpts(types,addNew){
+  const list=S.suppliers.filter(s=>!types||types.includes(s.type)).sort((a,b)=>a.name.localeCompare(b.name));
+  const o=[["","Select supplier"]].concat(list.map(s=>[s.id,s.name]));
+  if(addNew&&can.editSupplier())o.push(["__new","+ Add a new DMC / supplier…"]);
+  return o;
+}
+function newSupBox(defType){
+  return`<div class="addrow newsup" id="newsup" hidden data-target=""><input id="nsup-name" placeholder="New DMC / supplier name" aria-label="New supplier name"><select id="nsup-type" aria-label="Type">${SUPTYPES.map(t=>`<option ${t===defType?"selected":""}>${t}</option>`).join("")}</select><select id="nsup-pay" aria-label="How we pay">${PAYBY.map(t=>`<option>${t}</option>`).join("")}</select><button class="btn small" data-act="quickSup">Add and select</button><button class="linkbtn" data-act="quickSupCancel">Cancel</button></div>`;
+}
+function payTo(id){
+  const s=supById(id);
+  if(!s)return`<span class="warnt">Supplier not selected</span>`;
+  let h=`<div class="payto"><b>${esc(s.name)}</b><small>${esc(s.payBy)}</small>`;
+  if(s.accNo)h+=`<span>${esc(s.accName)}</span><span>${esc(s.bank)}</span><span class="mono">${esc(s.accNo)}</span><span class="mono">${esc(s.code)}</span>`;
+  else if(s.payBy==="Bank transfer")h+=`<span class="warnt">Bank details missing. Add them in Suppliers.</span>`;
+  if(s.pendingBank)h+=`<span class="warnt">Bank change waiting for approval. These are the current approved details.</span>`;
+  return h+"</div>";
+}
+function dueHtml(x){
+  if(!x.due)return'<span class="warnt">No date</span>';
+  const od=x.pay.st!=="paid"&&x.due<today();
+  return`${fdate(x.due)}${od?`<br>${chip("Overdue","bad")}`:""}`;
+}
+function payCell(f,x){
+  const p=x.pay,k=`data-file="${f.id}" data-inst="${x.id}"`;
+  if(p.st==="paid")return`<div class="pc">${chip("Paid","ok")}<small>${esc(p.ref)} · ${fdate(p.paidAt)} · ${esc(p.payBy)}</small>${can.pay()?`<button class="linkbtn" data-act="unpay" ${k}>Undo</button>`:""}</div>`;
+  if(p.st==="approved"){
+    let h=`<div class="pc">${chip("Approved · waiting for payment","accent")}<small>Approved by ${esc(p.by)}, ${fdate(p.at)}</small>`;
+    if(can.pay())h+=`<div class="payrow"><input id="pr-${f.id}-${x.id}" placeholder="UTR / payment ref" aria-label="Payment reference"><button class="btn small" data-act="pay" ${k}>Mark paid</button></div>`;
+    if(can.approve())h+=`<button class="linkbtn" data-act="unapprove" ${k}>Cancel approval</button>`;
+    return h+"</div>";
+  }
+  if(!(+x.amount>0)||!x.due)return`<span class="muted">Add amount and date</span>`;
+  return can.approve()?`<button class="btn small ghost" data-act="approve" ${k}>Approve payment</button>`:chip("Waiting for Operations approval","warn");
+}
+function stepsHtml(stage){
+  if(stage<0)return"";
+  return`<div class="steps">${["Payment verified","Costed","Invoiced","Closed"].map((n,i)=>`<div class="step ${i<stage?"done":(i===stage?"now":"")}">${n}</div>`).join("")}</div>`;
+}
+function histHtml(entries){
+  if(!entries.length)return`<p class="muted" style="margin:0">No changes recorded yet.</p>`;
+  return`<ul class="hist">${entries.slice().reverse().map(e=>`<li><span class="when">${ftime(e.t)}<br>${esc(e.who)} · ${esc(e.role)}</span><span class="chgv"><b>${esc(e.field)}</b>${e.from!==undefined?`: <s>${esc(e.from)}</s> → ${esc(e.to)}`:(e.to?`: ${esc(e.to)}`:"")}</span></li>`).join("")}</ul>`;
+}
+
+/* ---------- top ---------- */
+function allInst(){const a=[];S.files.filter(f=>f.submitted).forEach(f=>f.schedule.forEach(x=>{const it=itemOf(f,x.item);if(it)a.push({f,x,it})}));return a}
+function renderTop(){
+  $("#roles").innerHTML=`<label class="preview-role">View as <select id="preview-role" aria-label="Booking role">${Object.entries(ROLES).map(([k,r])=>`<option value="${k}" ${role===k?"selected":""}>${r.label}</option>`).join("")}</select></label><div hidden>`+Object.entries(ROLES).map(([k,r])=>`<button class="role" data-act="role" data-r="${k}" aria-pressed="${role===k}"><b>${r.label}</b><small>${esc(r.who)}</small></button>`).join("")+"</div>";
+  const t=tabsFor();
+  if(!t.find(x=>x[0]===tab))tab="bookings";
+  const ai=allInst();
+  const banks=S.suppliers.filter(s=>s.pendingBank&&s.pendingBank.role!==role).length;
+  const badge={today:isAcc()?todayData().total:0,payments:role==="ops"?ai.filter(a=>a.x.pay.st==="open").length:(role==="accounts"?ai.filter(a=>a.x.pay.st==="approved").length:0),suppliers:can.editSupplier()?banks:0};
+  $("#tabs").hidden=!t.length;
+  let firstSec=true;
+  $("#tabs").innerHTML=t.map(([k,l,sec2])=>{const c=sec2?(" sec2"+(firstSec?" first":"")):"";if(sec2)firstSec=false;return`<button class="tab${c}" role="tab" data-act="tab" data-t="${k}" aria-selected="${tab===k}">${l}${badge[k]?`<span class="badge">${badge[k]}</span>`:""}</button>`}).join("");
+  $("#adminbar").innerHTML="";
+}
+function renderStats(){
+  const fs=visible().filter(f=>f.submitted),cs=fs.map(calc),s=fn=>sum(cs,fn);
+  let items;
+  if(role==="sales")items=[["My bookings",fs.length],["Missing details",fs.filter(f=>missCount(f)>0).length],["Balance to collect",inr(s(c=>Math.max(c.balance,0)))],["Payments checked",inr(s(c=>c.recV)),0,1]];
+  else if(role==="res")items=[["Tickets to issue",fs.filter(f=>f.ticket&&f.ticket.status!=="Issued").length],["Balance to collect",inr(s(c=>Math.max(c.balance,0)))],["Flight bookings",cs.length,0,1],["Payments checked",inr(s(c=>c.recV)),0,1]];
+  else if(role==="ops")items=[["Costs to add",cs.filter(c=>c.pending).length],["Payments to approve",s(c=>c.toApprove)],["Overdue",s(c=>c.overdue)],["Payments to schedule",inr(s(c=>c.unsched)),0,1],["Files",cs.length,0,1]];
+  else items=[["Sold",inr(s(c=>c.sell))],["Markup",inr(s(c=>c.margin)),1],["To collect",inr(s(c=>Math.max(c.balance,0)))],["Supplier cost",inr(s(c=>c.cost)),1,1],["To pay now",inr(s(c=>c.toPay)),0,1],["Client payments to check",inr(s(c=>c.recU)),0,1]];
+  const shown=items.filter(i=>!i[3]||moreStats),hasMore=items.some(i=>i[3]);
+  $("#stats").innerHTML=shown.map(([l,v,cf])=>`<div class="stat${cf?" conf":""}"><span>${l}</span><b>${v}</b></div>`).join("")+(hasMore?`<button class="stat morebtn" data-act="moreStats">${moreStats?"Show less":"More totals"}</button>`:"");
+}
+/* ---------- bookings ---------- */
+function travelDate(f){return f.service==="flight"?f.depart:(f.service==="hotel"?f.checkin:(f.service==="visa"?f.appt:f.start))}
+function needsAction(f){
+  const c=calc(f);
+  if(role==="sales"||role==="res")return can.fixMissing(f)&&missCount(f)>0;
+  if(role==="ops")return c.pending||c.unsched>0||c.toApprove>0;
+  return c.recU>0||c.toPay>0||(!c.pending&&!f.invoiceNo);
+}
+function nextDue(f){const o=f.schedule.filter(x=>x.pay.st!=="paid"&&x.due).sort((a,b)=>a.due.localeCompare(b.due))[0];return o||null}
+function supNames(f){const n=[...new Set(itemsOf(f).map(i=>supName(i.sup)).filter(x=>x!=="—"))];return n.length?(n.length>2?n.slice(0,2).join(", ")+" +"+(n.length-2):n.join(", ")):(f.single.supText||"")}
+function listColsAll(){
+  if(role==="sales")return[["client","Client"],["what","Service · trip"],["date","Travel"],["bal","Balance"],["miss","Missing info"],["status","Status"],["id","File",1],["price","Price",1]];
+  if(role==="res")return[["client","Client"],["what","Service · trip"],["date","Travel"],["ticket","Ticket"],["status","Status"],["id","File",1],["bal","Balance",1],["miss","Missing info",1]];
+  if(role==="ops")return[["client","Client"],["what","Service · trip"],["date","Travel"],["cost","Supplier cost"],["status","Status"],["id","File",1],["supplier","Supplier",1],["next","Next supplier payment",1]];
+  return[["client","Client"],["what","Service · trip"],["date","Travel"],["price","Price"],["markup","Markup"],["status","Status"],["id","File",1],["cost","Cost",1],["bal","To collect",1]];
+}
+function listCols(){return listColsAll().filter(c=>!c[2]||moreCols)}
+const NUMCOLS=["price","bal","cost","markup"];
+const CONFCOLS=["cost","markup","supplier"];
+function colCls(k){return[NUMCOLS.includes(k)?"num":"",CONFCOLS.includes(k)&&isAcc()?"conf":""].join(" ").trim()}
+function cell(f,k,c){
+  switch(k){
+    case"id":return`<span class="fid">${f.id}</span>`;
+    case"client":{const bits=[];if(!moreCols)bits.push(f.id);if(f.owner!=="Arjun"||role!=="sales")bits.push("Sales: "+esc(f.owner));return`<span class="cname">${esc(f.client||"New client")}</span>${bits.length?`<span class="sub">${bits.join(" · ")}</span>`:""}`}
+    case"what":return`${dot(f.service)}${SERVICES[f.service].label}<span class="sub">${esc(summary(f))}</span>`;
+    case"date":return travelDate(f)?`<span class="nw">${fdate(travelDate(f))}</span>`:'<span class="muted">—</span>';
+    case"price":return inr(c.sell);
+    case"bal":return c.balance>0?`<span class="warnt">${inr(c.balance)}</span>`:inr(Math.max(c.balance,0));
+    case"cost":return c.pending?chip("Pending","warn"):inr(c.cost);
+    case"markup":return c.margin==null?'<span class="muted">—</span>':`${inr(c.margin)}<span class="sub">${band(c.sell?c.margin/c.sell:null)}</span>`;
+    case"supplier":{const n=supNames(f);return n?esc(n):'<span class="muted">Not set</span>'}
+    case"next":{const x=nextDue(f);if(!x)return c.unsched>0?chip("No date set","warn"):'<span class="muted">—</span>';const od=x.due<today();return`${fdate(x.due)}<span class="sub">${inr(x.amount)}${od?" · overdue":""}</span>`}
+    case"ticket":return f.ticket?(f.ticket.status==="Issued"?chip("Issued","ok"):chip("Not issued","warn")):"—";
+    case"miss":{const m=can.fixMissing(f)?missCount(f):0;return m?chip(m+" missing","bad"):chip("Complete","ok")}
+    case"status":{const[s,t]=status(f,c);return chip(s,t)}
+  }
+  return"";
+}
+function filteredFiles(){
+  let fs=visible();
+  if(listFilter==="action")fs=fs.filter(needsAction);
+  const term=q.trim().toLowerCase();
+  if(term)fs=fs.filter(f=>[f.id,f.client,summary(f),f.mobile].join(" ").toLowerCase().includes(term));
+  return fs;
+}
+function listRows(){
+  const fs=filteredFiles(),term=q.trim(),cols=listCols();
+  if(!fs.length)return`<tr><td colspan="${cols.length}" class="emptyrow">${term?"No bookings match your search.":(listFilter==="action"?"Nothing needs your action right now.":"No booking files yet.")}</td></tr>`;
+  return fs.map(f=>{const c=calc(f);return`<tr class="rowlink" data-act="pick" data-id="${f.id}" tabindex="0">${cols.map(([k])=>`<td class="${colCls(k)}">${cell(f,k,c)}</td>`).join("")}</tr>`}).join("");
+}
+const TABNAMES={today:"Today",bookings:"All bookings",cash:"Money in & out",profit:"Profit & markup",payments:"Supplier payments",suppliers:"DMCs & suppliers",log:"Change log",rules:"Access rules"};
+function renderBookings(){
+  if(newMode){$("#view").innerHTML=`<div class="detailwrap"><div class="backrow"><button class="backbtn" data-act="cancelNew">← All bookings</button></div><article class="panel">${newHtml()}</article></div>`;return}
+  if(open&&cur()){$("#view").innerHTML=`<div class="detailwrap"><div class="backrow"><button class="backbtn" data-act="back">← ${navFrom?TABNAMES[navFrom]:"All bookings"}</button></div><article class="panel" id="detail" aria-live="polite">${detailHtml()}</article></div>`;return}
+  open=false;
+  const all=visible(),nAct=all.filter(needsAction).length;
+  const actLabel=(role==="sales"||role==="res")?"Missing info":"To do";
+  const title=role==="sales"?(R().ownOnly?"My bookings":"All bookings"):(role==="res"?"Flight bookings":"All bookings");
+  $("#view").innerHTML=`<section class="paysec">
+    <div class="listbar"><h2>${title}</h2><div class="listtools">
+      <div class="filters" role="group" aria-label="Filter" style="margin:0"><button class="fbtn" data-act="filter" data-v="all" aria-pressed="${listFilter==="all"}">All (${all.length})</button><button class="fbtn" data-act="filter" data-v="action" aria-pressed="${listFilter==="action"}">${actLabel} (${nAct})</button></div>
+      <input class="search" id="q" type="search" placeholder="Search client, booking number or destination" aria-label="Search bookings" value="${esc(q)}">
+      ${role!=="ops"?`<button class="btn small" data-act="new">+ New booking</button>`:""}
+    </div></div>
+    <div class="tbl"><table class="blist"><thead><tr>${listCols().map(([k,l])=>`<th class="${colCls(k)}">${l}</th>`).join("")}</tr></thead><tbody id="rows">${listRows()}</tbody></table></div>
+    <div class="listbar"><div class="row"><span class="muted">Open a booking to see or update it.</span><button class="linkbtn" data-act="moreCols">${moreCols?"Show less":"More details"}</button></div>${expBtns("list")}</div>
+    ${legendHtml()}</section>`;
+}
+function salesSupplierHtml(f,c){
+  if(role!=="sales")return"";
+  const r=R();if(!(r.seeSupplier||r.seeCost||r.seeMarkup))return"";
+  if(can.seeCost(f))return"";
+  const cells=[],sub=[];
+  if(r.seeSupplier){cells.push(`<div class="kv"><span>Supplier / DMC</span><b>${esc(supNames(f)||"Not set yet")}</b></div>`);sub.push(esc(supNames(f)||"Supplier not set"))}
+  if(r.seeCost)cells.push(`<div class="kv"><span>Supplier cost</span><b>${c.pending?"Pending":inr(c.cost)}</b></div>`);
+  if(r.seeMarkup){cells.push(`<div class="kv"><span>Markup</span><b>${c.margin==null?"Pending":inr(c.margin)}</b></div>`);sub.push("Markup "+(c.margin==null?"pending":inr(c.margin)))}
+  return accOpen("ssum","Supplier summary",sub.join(" · "),"conf")+`<div class="grid">${cells.join("")}</div>`+accClose;
+}
+function newHtml(){
+  const svcs=role==="res"?{flight:SERVICES.flight}:SERVICES;
+  return`<section class="sec"><h3>New booking · what are you booking?</h3><div class="svcgrid">${Object.entries(svcs).map(([k,s])=>`<button class="svc" data-act="svc" data-s="${k}"><b>${s.label}</b><small>${s.hint}</small></button>`).join("")}</div><div><button class="linkbtn" data-act="cancelNew">Cancel</button></div></section>`;
+}
+function missingHtml(f){
+  const m=missing(f),reqs=openReqs(f),n=m.length+reqs.length;
+  if(!n)return f.submitted?`<div class="allok">${chip("All details filled","ok")}</div>`:"";
+  const first=(reqs[0]&&reqs[0].text)||m[0].label;
+  return accOpen("missing",`Missing information · ${n}`,esc(first)+(n>1?` and ${n-1} more`:""),"missbox")+`<ul class="mlist">
+    ${reqs.map(r=>`<li><span>${chip("Request","bad")} ${esc(r.text)} <small class="muted">· from ${esc(r.by)}, ${fdate(r.at)}</small></span><button class="btn small ghost" data-act="reqDone" data-id="${r.id}">Mark done</button></li>`).join("")}
+    ${m.map(x=>`<li><span>${x.block?chip("Required","bad"):chip("Missing","warn")} ${esc(x.label)}</span><button class="linkbtn" data-act="focus" data-target="${x.k?idOf("f."+x.k):x.target}">Fill now</button></li>`).join("")}
+  </ul>`+accClose;
+}
+function requestsHtml(f){
+  const reqs=f.requests||[],openN=reqs.filter(r=>!r.done).length;
+  return accOpen("req","Ask Sales for information",reqs.length?`${openN} open · ${reqs.length-openN} done`:"No requests yet")+`
+    ${reqs.length?`<ul class="checks">${reqs.map(r=>`<li>${r.done?chip("Done","ok"):chip("Waiting for Sales","warn")} ${esc(r.text)} <small class="muted">· asked by ${esc(r.by)}, ${fdate(r.at)}${r.done?` · done by ${esc(r.doneBy)}`:""}</small></li>`).join("")}</ul>`:""}
+    <div class="addrow"><input id="rq-text" placeholder="e.g. Passport copies for both travellers" aria-label="What do you need from Sales"><button class="btn small" data-act="askSales">Send to Sales</button></div>`+accClose;
+}
+function factsHtml(f,c){
+  const it=[["Travel",travelDate(f)?fdate(travelDate(f)):"—"],[isFlight(f)?"Passengers":"People",f.pax||"—"]];
+  if(can.seeReceipts()||can.seeSell())it.push(["Price",inr(c.sell)]);
+  if(can.seeReceipts())it.push(["Balance",`<span class="${c.balance>0?"warnt":"okt"}">${inr(Math.max(c.balance,0))}</span>`]);
+  if(isAcc())it.push(["Markup",`<span style="color:var(--conf)">${c.margin==null?"Pending":inr(c.margin)}</span>`]);
+  else if(role==="ops")it.push(["Supplier cost",c.pending?"Pending":inr(c.cost)]);
+  return`<div class="facts">${it.map(([l,v])=>`<div><span>${l}</span><b>${v}</b></div>`).join("")}</div>`;
+}
+function detailHtml(){
+  const f=cur();
+  if(!f)return`<div class="empty">Select a booking file.</div>`;
+  draftView=!f.submitted;
+  const c=calc(f),[st,tone,stage]=status(f,c),edT=can.editTrip(f),edP=can.editPrice(f);
+  const ms=new Set(can.fixMissing(f)?missing(f).filter(x=>x.k).map(x=>x.k):[]);
+  const tchip=isFlight(f)&&f.submitted?(f.ticket.status==="Issued"?chip("Ticket issued","ok"):chip("Ticket not issued","warn")):"";
+  let h=`<header class="dhead"><div><div class="fid">${dot(f.service)}${f.id} · ${SERVICES[f.service].label}</div><h2>${esc(f.client||"New client")}</h2><p class="muted">${esc(summary(f))}${role!=="sales"?` · Sales: ${esc(f.owner)}`:""}</p></div><div class="chips">${tchip}${chip(st,tone)}</div></header>`+factsHtml(f,c)+stepsHtml(stage);
+  if(!f.submitted){
+    h+=`<div class="draft"><div><p><b>Draft.</b> Only you can see this booking. Fill in the details and submit it to send it to Operations and Accounts.</p>${submitErr?`<p style="margin-top:6px"><b class="badt">Fill these before submitting:</b></p><ul>${submitErr.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:""}</div><button class="btn" data-act="submit">Submit booking</button></div>`;
+  }
+  if(can.fixMissing(f))h+=missingHtml(f);
+
+  const tripSub=[f.mobile?esc(f.mobile):"",esc(summary(f))].filter(Boolean).join(" · ");
+  h+=accOpen("trip",isFlight(f)?"Passenger & flight":"Client & trip",tripSub)+`<div class="grid">
+    ${fld(isFlight(f)?"Lead passenger / group name":"Client name","f.client",f.client,"text",edT,{ph:"Full name",miss:ms.has("client")})}
+    ${fld("Mobile","f.mobile",f.mobile,"tel",edT,{ph:"+91",miss:ms.has("mobile")})}
+    ${fld("Address","f.address",f.address,"text",edT,{miss:ms.has("address")})}
+    ${TRIP[f.service].map(([k,l,t,x])=>t==="select"?selFld(l,"f."+k,f[k]||x[0],x.map(v=>[v,v]),edT):fld(l,"f."+k,f[k],t,edT,{wide:x==="wide",miss:ms.has(k)})).join("")}
+  </div>`+accClose;
+
+  if(isFlight(f))h+=flightHtml(f,edT);
+
+  if(can.seeReceipts()){
+    const addR=can.addReceipt(f);
+    const paySub=`Received <b class="okt">${inr(c.recV)}</b> · To collect <b class="${c.balance>0?"warnt":""}">${inr(Math.max(c.balance,0))}</b>${c.recU?` · <span class="warnt">${inr(c.recU)} not checked yet</span>`:""}`;
+    h+=accOpen("pay",SERVICES[f.service].title+" & client payments",paySub,"",ms.has("sell"))+`
+      ${isGroup(f)&&role==="sales"?`<p class="note info">Group fare: the Reservation Head gives the rate and collects the payments.</p>`:""}
+      <div class="grid">
+      ${fld(SERVICES[f.service].title,"f.sell",f.sell||"","number",edP,{money:true,ph:"₹",miss:ms.has("sell")})}
+      <div class="kv"><span>Received (verified)</span><b class="okt">${inr(c.recV)}</b></div>
+      <div class="kv"><span>Balance to collect</span><b class="${c.balance>0?"warnt":""}">${inr(c.balance)}</b></div></div>
+      <div class="tbl"><table class="rec"><thead><tr><th>Date</th><th class="num">Amount</th><th>Mode</th><th>Reference</th><th>Collected by</th><th>Bank check</th></tr></thead><tbody>
+      ${f.receipts.length?f.receipts.map((r,i)=>`<tr><td>${fdate(r.date)}</td><td class="num">${inr(r.amount)}</td><td>${esc(r.mode)}</td><td class="mono">${esc(r.ref)||"—"}</td><td>${esc(r.by||"—")}</td>
+        <td>${can.verify()&&f.submitted?tickBox("x-r-"+i,"r."+i+".verified",r.verified,"Client payment "+inr(r.amount)+" verified","Verified"):(r.verified?chip("Verified","ok"):chip("Not checked yet","warn"))}</td></tr>`).join(""):`<tr><td colspan="6" class="emptyrow">No payments recorded yet.</td></tr>`}
+      </tbody></table></div>`+
+      (addR?`<div class="addrow"><input type="date" id="nr-date" aria-label="Payment date" value="${today()}"><input type="number" id="nr-amt" aria-label="Amount" placeholder="Amount ₹" min="0"><select id="nr-mode" aria-label="Payment mode">${MODES.map(m=>`<option>${m}</option>`).join("")}</select><input id="nr-ref" aria-label="Reference" placeholder="UTR / UPI ref"><button class="btn small" data-act="addReceipt">Add payment</button></div>`:"")+accClose;
+  }
+
+  if(role==="sales"&&R().enterDmc)h+=salesKnowsHtml(f);
+  h+=salesSupplierHtml(f,c);
+  h+=costHtml(f,c);
+  if(f.submitted&&can.seeSchedule(f))h+=scheduleHtml(f,c);
+  if(f.submitted&&!can.fixMissing(f))h+=requestsHtml(f);
+
+  if(f.submitted&&isAcc()){
+    const pctv=c.margin!=null&&c.sell?c.margin/c.sell:null;
+    h+=accOpen("acct","Accounts · markup",`Markup <b style="color:var(--conf)">${c.margin==null?"pending":inr(c.margin)}</b>${pctv!=null?" ("+(pctv*100).toFixed(1)+"%)":""} · ${f.invoiceNo?"Invoice "+esc(f.invoiceNo):"Not invoiced"}${f.vyapar?" · In Vyapar":""}`,"conf")+`
+      <div class="pl"><div><span>Client price</span><b>${inr(c.sell)}</b></div><div><span>Supplier cost</span><b>${c.pending?"Pending":inr(c.cost)}</b></div><div class="m"><span>Markup</span><b>${c.margin==null?"Pending":inr(c.margin)}</b><small>${c.margin==null?"":band(pctv)}</small></div></div>
+      <div class="pl sub"><div><span>Received (verified)</span><b class="okt">${inr(c.recV)}</b></div><div><span>Client payments to check</span><b>${inr(c.recU)}</b></div><div><span>Client balance</span><b>${inr(c.balance)}</b></div><div><span>Still owed to suppliers</span><b class="owed">${inr(c.supDue)}</b></div></div>
+      ${c.pending?`<p class="note warn">Supplier cost is not final. Markup updates when the net price is added.</p>`:""}
+      <div class="grid">${fld("Invoice no.","f.invoiceNo",f.invoiceNo,"text",true,{ph:"RH/26-27/0001"})}
+      <div class="kv"><span>Accounting software</span>${tickBox("x-f-vyapar","f.vyapar",f.vyapar,"Entered in Vyapar","Entered in Vyapar")}</div></div>`+accClose;
+  }
+  if(can.seeLog()||(role==="sales"&&R().seeHistory&&f.submitted)){
+    const hs=S.log.filter(e=>e.tid===f.id&&(isAcc()||!/net|cost|markup|supplier paid|supplier payment|payment date/i.test(e.field)));
+    h+=accOpen("hist","Change history",hs.length?`${hs.length} change${hs.length===1?"":"s"} · last by ${esc(hs[hs.length-1].who)}, ${ftime(hs[hs.length-1].t)}`:"No changes yet")+histHtml(hs)+accClose;
+  }
+  return h;
+}
+/* ---------- profit & markup (Accounts + Admin) ---------- */
+function profitRows(){return S.files.filter(f=>f.submitted&&(profitSvc==="all"||f.service===profitSvc)).map(f=>({f,c:calc(f)}))}
+function profitTotals(rows){
+  const known=rows.filter(r=>r.c.margin!=null);
+  const sold=sum(known,r=>r.c.sell),cost=sum(known,r=>r.c.cost),mk=sum(known,r=>r.c.margin);
+  return{known,sold,cost,mk,pct:sold?mk/sold:null,pending:rows.length-known.length,
+    recv:sum(rows,r=>r.c.recV),toCollect:sum(rows,r=>Math.max(r.c.balance,0)),owed:sum(rows,r=>r.c.supDue||0)};
+}
+function barsHtml(groups){
+  const max=Math.max(1,...groups.map(g=>Math.abs(g.mk)));
+  if(!groups.length)return'<p class="muted" style="margin:0">No costed bookings yet.</p>';
+  return`<div class="bars">${groups.map(g=>`<div class="bar"><span>${g.label}</span><div class="tr"><div class="fl" style="width:${Math.max(2,Math.abs(g.mk)/max*100).toFixed(1)}%"></div></div><span class="vl">${inr(g.mk)} · ${g.sold?(g.mk/g.sold*100).toFixed(1)+"%":"—"}</span></div>`).join("")}</div>`;
+}
+function group(rows,keyFn,labelFn){
+  const m={};rows.filter(r=>r.c.margin!=null).forEach(r=>{const k=keyFn(r.f);(m[k]=m[k]||{label:labelFn(k),mk:0,sold:0});m[k].mk+=r.c.margin;m[k].sold+=r.c.sell});
+  return Object.values(m).sort((a,b)=>b.mk-a.mk);
+}
+function renderProfit(){
+  const rows=profitRows(),t=profitTotals(rows);
+  const tiles=[["Sold (costed bookings)",inr(t.sold),""],["Markup",inr(t.mk),"conf"],["Average markup",t.pct==null?"—":(t.pct*100).toFixed(1)+"%","conf"],["Still to collect",inr(t.toCollect),"warnt"],["Supplier cost",inr(t.cost),"conf",1],["Received from clients",inr(t.recv),"okt",1],["Still owed to suppliers",inr(t.owed),"owed",1]];
+  const shown=tiles.filter(x=>!x[3]||moreProfit);
+  const tbody=rows.length?rows.map(({f,c})=>`<tr class="rowlink" data-act="pick" data-goto="bookings" data-id="${f.id}" tabindex="0">
+    <td><span class="cname">${esc(f.client)}</span><span class="sub">${f.id} · ${esc(f.owner)}</span></td>
+    <td>${dot(f.service)}${SERVICES[f.service].label}<span class="sub">${travelDate(f)?fdate(travelDate(f)):""}</span></td>
+    <td class="num">${inr(c.sell)}</td>
+    ${moreCols?`<td class="num conf">${c.pending?chip("Pending","warn"):inr(c.cost)}</td>`:""}
+    <td class="num conf"><b>${c.margin==null?"—":inr(c.margin)}</b></td><td class="conf">${band(c.margin!=null&&c.sell?c.margin/c.sell:null)}</td>
+    ${moreCols?`<td class="num okt">${inr(c.recV)}</td><td class="num ${c.balance>0?"warnt":""}">${inr(Math.max(c.balance,0))}</td><td class="num ${c.supDue>0?"owed":""}">${c.supDue==null?"—":inr(c.supDue)}</td>`:""}
+    <td>${f.invoiceNo?chip("Invoiced","ok"):chip("Not invoiced","warn")}</td></tr>`).join(""):`<tr><td colspan="11" class="emptyrow">No bookings for this service.</td></tr>`;
+  $("#view").innerHTML=`<div style="display:flex;flex-direction:column;gap:14px">
+    <div class="confbanner"><div><b>Profit & markup</b><br><span>Confidential. Visible to Accounts and Admin only.</span></div>${confTag.replace('class="conftag"','class="conftag" style="background:#FFFFFF;color:var(--conf)"')}</div>
+    <div class="listbar"><div class="listtools"><label class="lbl" for="pf-svc">Service</label><select id="pf-svc" class="selsm"><option value="all">All services</option>${Object.entries(SERVICES).map(([k,s])=>`<option value="${k}" ${profitSvc===k?"selected":""}>${s.label}</option>`).join("")}</select></div>${expBtns("profit")}</div>
+    <div class="stats">${shown.map(([l,v,cl])=>`<div class="stat${cl==="conf"?" conf":""}"><span>${l}</span><b class="${cl!=="conf"?cl:""}">${v}</b></div>`).join("")}<button class="stat morebtn" data-act="moreProfit">${moreProfit?"Show less":"More totals"}</button></div>
+    ${t.pending?`<p class="note warn">${t.pending} booking${t.pending===1?" has":"s have"} no supplier cost yet and ${t.pending===1?"is":"are"} not counted in the markup.</p>`:""}
+    ${pgSec("pf-charts","Markup charts","By service and by sales staff",`<div class="cards2"><div class="card"><h3>Markup by service</h3>${barsHtml(group(rows,f=>f.service,k=>dot(k)+SERVICES[k].label))}</div><div class="card"><h3>Markup by sales staff</h3>${barsHtml(group(rows,f=>f.owner,k=>esc(k)))}</div></div>`)}
+    <div class="tbl"><table class="profit"><thead><tr><th>Client</th><th>Service · travel</th><th class="num">Price</th>${moreCols?'<th class="num conf">Supplier cost</th>':""}<th class="num conf">Markup</th><th class="conf">Markup %</th>${moreCols?'<th class="num">Received</th><th class="num">To collect</th><th class="num">Owed to suppliers</th>':""}<th>Invoice</th></tr></thead><tbody>${tbody}</tbody></table></div>
+    <div class="listbar"><div class="row"><span class="muted">Click a booking to open it.</span><button class="linkbtn" data-act="moreCols">${moreCols?"Show less":"More details"}</button></div></div>
+    ${legendHtml()}</div>`;
+}
+/* ---------- export (Excel / PDF) ---------- */
+function exportCols(){
+  const base=[["File",f=>f.id],["Client",f=>f.client],["Mobile",f=>f.mobile],["Sales staff",f=>f.owner],["Service",f=>SERVICES[f.service].label],["Trip",f=>summary(f)],["Travel date",f=>travelDate(f)?fdate(travelDate(f)):""],["Status",(f,c)=>status(f,c)[0]]];
+  const M=(l,fn)=>[l,fn,"money"];
+  if(role==="sales")return base.concat([M("Price",(f,c)=>c.sell),M("Received",(f,c)=>c.recV),M("Balance",(f,c)=>Math.max(c.balance,0)),["Missing info",f=>missCount(f)]]);
+  if(role==="res")return base.concat([["Ticket",f=>f.ticket?f.ticket.status:""],M("Price",(f,c)=>c.sell),M("Received",(f,c)=>c.recV),M("Balance",(f,c)=>Math.max(c.balance,0))]);
+  if(role==="ops")return base.concat([["Supplier",f=>supNames(f)],M("Supplier cost",(f,c)=>c.cost),["Next payment date",f=>{const x=nextDue(f);return x?fdate(x.due):""}],M("Next payment amount",f=>{const x=nextDue(f);return x?x.amount:null})]);
+  return base.concat([M("Price",(f,c)=>c.sell),["Supplier",f=>supNames(f)],M("Supplier cost",(f,c)=>c.cost),M("Markup",(f,c)=>c.margin),["Markup %",(f,c)=>c.margin!=null&&c.sell?c.margin/c.sell:null,"pct"],M("Received",(f,c)=>c.recV),M("To collect",(f,c)=>Math.max(c.balance,0)),M("Owed to suppliers",(f,c)=>c.supDue),["Invoice no.",f=>f.invoiceNo]]);
+}
+function exportData(kind){
+  const by=who()+" ("+ROLES[role].label+")";
+  if(kind==="list"){
+    const cols=exportCols(),fs=filteredFiles();
+    const h=cols.map(c=>c[0]);
+    return{title:role==="sales"?"My bookings":"Bookings",slug:"Bookings",sheet:"Bookings",conf:isAcc(),by,headers:h,types:cols.map(c=>c[2]||"text"),
+      rows:fs.map(f=>{const c=calc(f);return cols.map(col=>col[1](f,c))}),pctOf:isAcc()?[h.indexOf("Markup"),h.indexOf("Price")]:null};
+  }
+  if(kind==="profit"){
+    const rows=profitRows();
+    const headers=["File","Client","Sales staff","Service","Travel date","Price","Supplier cost","Markup","Markup %","Received","To collect","Owed to suppliers","Invoice no."];
+    return{title:"Profit & markup"+(profitSvc!=="all"?" · "+SERVICES[profitSvc].label:""),slug:"Profit-markup",sheet:"Profit & markup",conf:true,by,headers,
+      types:["text","text","text","text","text","money","money","money","pct","money","money","money","text"],pctOf:[7,5],
+      rows:rows.map(({f,c})=>[f.id,f.client,f.owner,SERVICES[f.service].label,travelDate(f)?fdate(travelDate(f)):"",c.sell,c.cost,c.margin,c.margin!=null&&c.sell?c.margin/c.sell:null,c.recV,Math.max(c.balance,0),c.supDue,f.invoiceNo])};
+  }
+  if(kind==="cash"){
+    const rows=cashFiltered();
+    return{title:"Receipts & payments"+(cbMonth!=="all"?" · "+monthName(cbMonth):""),slug:"Receipts-payments",sheet:"Receipts & payments",conf:true,by,
+      headers:["Date","Type","File","Client","From / to","Item","Money in","Money out","Mode","Reference","Recorded by","Status"],
+      types:["text","text","text","text","text","text","money","money","text","text","text","text"],
+      rows:rows.map(x=>[fdate(x.date),x.dir==="in"?"Receipt":"Payment",x.f.id,x.f.client,x.party,x.item||"",x.dir==="in"?x.amount:null,x.dir==="out"?x.amount:null,x.mode||"",x.ref||"",x.by||"",x.dir==="out"?"Paid":(x.ok?"Verified":"Not checked yet")])};
+  }
+  const ai=allInst().sort((a,b)=>String(a.x.due||"9").localeCompare(String(b.x.due||"9")));
+  const st=x=>x.pay.st==="paid"?"Paid":(x.pay.st==="approved"?"Approved, to pay":"Waiting for approval");
+  return{title:"Supplier payments",slug:"Supplier-payments",sheet:"Supplier payments",conf:true,by,
+    headers:["File","Client","Supplier","Item","Amount","Pay by","Status","Account name","Bank","Account no. / IBAN","IFSC / SWIFT","Payment ref","Paid on"],
+    types:["text","text","text","text","money","text","text","text","text","text","text","text","text"],
+    rows:ai.map(({f,x,it})=>{const s=supById(it.sup)||{};return[f.id,f.client,supName(it.sup),it.label,x.amount,x.due?fdate(x.due):"",st(x),s.accName||"",s.bank||"",s.accNo||(s.payBy&&s.payBy!=="Bank transfer"?s.payBy:""),s.code||"",x.pay.ref||"",x.pay.paidAt?fdate(x.pay.paidAt):""]})};
+}
+function totalsRow(d){
+  return d.headers.map((h,i)=>{
+    if(i===0)return"Total";
+    if(d.types[i]==="money")return d.rows.reduce((t,r)=>t+(+r[i]||0),0);
+    if(d.types[i]==="pct"&&d.pctOf&&d.pctOf[0]>=0){const a=d.rows.reduce((t,r)=>t+(r[d.pctOf[0]]!=null&&r[i]!=null?+r[d.pctOf[0]]||0:0),0),b=d.rows.reduce((t,r)=>t+(r[d.pctOf[0]]!=null&&r[i]!=null?+r[d.pctOf[1]]||0:0),0);return b?a/b:null}
+    return"";
+  });
+}
+function makeXlsx(d){
+  const X=window.XLSX;if(!X)throw{code:"lib"};
+  const aoa=[["Romford Holidays · "+d.title+(d.conf?" · CONFIDENTIAL":"")],["Exported "+fdate(today())+" by "+d.by],[],d.headers];
+  d.rows.forEach(r=>aoa.push(r.map(v=>v==null?"":v)));
+  const first=5,last=4+d.rows.length,hasTot=d.rows.length>0&&d.types.includes("money");
+  if(hasTot)aoa.push(d.headers.map((h,i)=>i===0?"Total":""));
+  const ws=X.utils.aoa_to_sheet(aoa);
+  d.types.forEach((t,i)=>{
+    const col=X.utils.encode_col(i);
+    for(let r=first;r<=last;r++){const c=ws[col+r];if(c&&typeof c.v==="number")c.z=t==="pct"?"0.0%":"#,##0"}
+    if(hasTot&&t==="money")ws[col+(last+1)]={t:"n",f:`SUM(${col}${first}:${col}${last})`,z:"#,##0"};
+    if(hasTot&&t==="pct"&&d.pctOf&&d.pctOf[0]>=0){const a=X.utils.encode_col(d.pctOf[0]),b=X.utils.encode_col(d.pctOf[1]);ws[col+(last+1)]={t:"n",f:`IFERROR(${a}${last+1}/${b}${last+1},0)`,z:"0.0%"}}
+  });
+  ws["!cols"]=d.headers.map((h,i)=>({wch:Math.min(42,Math.max(String(h).length,...d.rows.map(r=>String(r[i]==null?"":(typeof r[i]==="number"?Math.round(r[i]).toLocaleString("en-IN"):r[i])).length))+3)}));
+  if(d.rows.length)ws["!autofilter"]={ref:`A4:${X.utils.encode_col(d.headers.length-1)}${last}`};
+  const wb=X.utils.book_new();X.utils.book_append_sheet(wb,ws,d.sheet.slice(0,31));
+  return new Blob([X.write(wb,{bookType:"xlsx",type:"array"})]);
+}
+function pdfCell(v,t){if(v==null||v==="")return"";if(t==="money")return"Rs "+Math.round(+v).toLocaleString("en-IN");if(t==="pct")return(v*100).toFixed(1)+"%";return String(v)}
+function makePdf(d){
+  const J=window.jspdf;if(!J||!J.jsPDF)throw{code:"lib"};
+  const doc=new J.jsPDF({orientation:"landscape",unit:"pt",format:"a4"}),W=doc.internal.pageSize.getWidth();
+  doc.setFillColor(23,54,93);doc.rect(0,0,W,6,"F");
+  doc.setFont("helvetica","bold");doc.setFontSize(9);doc.setTextColor(23,54,93);doc.text("ROMFORD HOLIDAYS",36,30);
+  doc.setFontSize(16);doc.text(d.title,36,50);
+  doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(91,104,120);doc.text("Exported "+fdate(today())+" by "+d.by,36,66);
+  if(d.conf){doc.setFillColor(107,63,160);doc.roundedRect(W-136,34,100,20,10,10,"F");doc.setTextColor(255,255,255);doc.setFont("helvetica","bold");doc.setFontSize(9);doc.text("CONFIDENTIAL",W-86,47,{align:"center"})}
+  const body=d.rows.map(r=>r.map((v,i)=>pdfCell(v,d.types[i])));
+  const foot=d.rows.length&&d.types.includes("money")?[totalsRow(d).map((v,i)=>i===0?"Total":pdfCell(v,d.types[i]))]:undefined;
+  const colStyles={};d.types.forEach((t,i)=>{if(t==="money"||t==="pct")colStyles[i]={halign:"right"}});
+  doc.autoTable({head:[d.headers],body,foot,startY:80,margin:{left:36,right:36},theme:"grid",
+    styles:{fontSize:d.headers.length>12?6.5:8,cellPadding:3.5,lineColor:[225,230,237],lineWidth:.5,textColor:[20,32,46]},
+    headStyles:{fillColor:d.conf?[107,63,160]:[23,54,93],textColor:255,fontStyle:"bold"},
+    footStyles:{fillColor:[233,239,247],textColor:[20,32,46],fontStyle:"bold"},
+    columnStyles:colStyles,showFoot:"lastPage",
+    didDrawPage:()=>{const H=doc.internal.pageSize.getHeight();doc.setFontSize(8);doc.setTextColor(91,104,120);doc.text("Page "+doc.internal.getNumberOfPages(),W-36,H-18,{align:"right"});if(d.conf)doc.text("Confidential · Romford Holidays internal use only",36,H-18)}});
+  if(!d.rows.length){doc.setFontSize(10);doc.setTextColor(91,104,120);doc.text("No rows to show.",36,110)}
+  return doc.output("blob");
+}
+async function doExport(kind,fmt){
+  if(!DL){toast("Export works when this page is opened in Claude.");return}
+  try{
+    const d=exportData(kind),fname=`Romford-${d.slug}-${today()}.${fmt}`;
+    const data=fmt==="xlsx"?makeXlsx(d):makePdf(d);
+    const r=await DL.save({filename:fname,data});
+    if(r&&r.status==="saved")toast("Saved "+fname);
+    log("export","Export",`Exported ${d.title}`,undefined,fmt.toUpperCase()+" · "+d.rows.length+" rows");save();
+  }catch(e){
+    const c=e&&e.code;if(c==="declined")return;
+    toast(c==="lib"?"The export tools did not load. Reload the page and try again.":(c==="rate_limited"?"Another download is waiting. Try again in a moment.":"The file could not be saved here."));
+  }
+}
+function renderRules(){
+  const r=R();
+  const row=(id,p,checked,lab,hint)=>`<label class="rule" for="${id}"><span><b>${esc(lab)}</b><small>${esc(hint)}</small></span><input type="checkbox" class="switch" id="${id}" data-p="${p}" data-o="${checked?1:0}" data-lab="${esc(lab)}" ${checked?"checked":""}></label>`;
+  $("#view").innerHTML=`<div class="detailwrap"><section class="paysec"><h2>Access rules</h2><p>Decide what Sales staff can see and do. Changes apply to every Sales login once you save.</p></section>
+    <article class="panel">
+      <section class="sec"><h3>Sales staff</h3><div class="rulelist">${RULES.map(([k,l,hnt])=>row("x-rule-"+k,"rule."+k,r[k],l,hnt)).join("")}</div></section>
+      <section class="sec"><h3>Operations</h3><div class="rulelist">${row("x-set-opsSeeSell","set.opsSeeSell",S.opsSeeSell,"Operations can see the client price","Package price and client payments.")}</div></section>
+      <section class="sec"><h3>Always hidden from Sales</h3><ul class="always"><li>Supplier bank details</li><li>Supplier payment schedule and payments</li><li>Payment approvals</li><li>Invoice and Vyapar entries</li><li>The full change log</li><li>Other teams' requests and notes on bank changes</li></ul></section>
+      <section class="sec"><div class="row"><button class="btn ghost small" data-act="role" data-r="sales">View as Sales</button><span class="muted">Save your changes first, then preview.</span></div></section>
+    </article></div>`;
+}
+function salesKnowsHtml(f){
+  if(!((f.service==="tour"&&f.costMode==="single")||f.service==="hotel"))return"";
+  const s=f.single,isT=f.service==="tour",lab=isT?"DMC name":"Hotel / supplier name";
+  const name=s.sup?supName(s.sup):(s.supText||"");
+  const types=isT?["DMC"]:SINGLE.hotel.types;
+  const locked=itemLocked(f,"s");
+  let inner;
+  if(locked)inner=`<div class="grid">${fld(lab,"",name,"text",false)}${fld("Net rate","",s.net,"number",false,{money:true})}</div>`;
+  else inner=`<div class="grid">
+      <label class="fld" for="x-s-supName"><span>${lab}</span><input id="x-s-supName" list="dl-sup" data-p="s.supName" data-o="${esc(name)}" data-lab="${isT?"DMC":"Supplier"} (from Sales)" value="${esc(name)}" placeholder="Start typing the name"></label>
+      ${fld("Net rate (if available)","s.net",s.net,"number",true,{money:true,ph:"₹ leave blank if not known",lab:"Net rate (from Sales)"})}
+    </div><datalist id="dl-sup">${S.suppliers.filter(x=>types.includes(x.type)).map(x=>`<option value="${esc(x.name)}"></option>`).join("")}</datalist>`;
+  return accOpen("knows",isT?"DMC (optional)":"Supplier (optional)",f.salesKnows?esc(name||"Name not entered")+(s.net?" · net rate "+inr(s.net):""):"Not entered")+`
+    ${tickBox("x-f-salesKnows","f.salesKnows",f.salesKnows,"Sales knows supplier",isT?"I know the DMC and the net rate":"I know the supplier and the net rate","knows")}
+    <div id="knowsFields" ${f.salesKnows?"":"hidden"}>${inner}</div>`+accClose;
+}
+function flightHtml(f,edT){
+  const t=f.ticket,ed=can.editTicket(f);
+  let h=accOpen("ticket","Fare & ticketing",(f.fareType==="group"?"Group fare":"Portal fare")+" · Ticket "+esc(t.status.toLowerCase())+(t.nos?" · "+esc(t.nos):""))+`
+    <div class="seg" role="group" aria-label="Fare type">
+      <button data-act="fare" data-v="portal" aria-pressed="${f.fareType==="portal"}" ${edT&&!itemLocked(f,"s")?"":"disabled"}><b>Portal fare</b><small>Staff book on Akbar, Riya, TBO etc.</small></button>
+      <button data-act="fare" data-v="group" aria-pressed="${f.fareType==="group"}" ${edT&&!itemLocked(f,"s")?"":"disabled"}><b>Group fare</b><small>Reservation Head gives the rate and issues the ticket</small></button>
+    </div>`;
+  if(isGroup(f))h+=`<p class="note info">Group fare: Reservation Head gives the rate, collects payment and issues the ticket. If the Reservation Head is not available, the In-charge does it.</p>`;
+  h+=`<div class="grid">
+    ${selFld("Ticket status","t.status",t.status,[["Not issued","Not issued"],["Issued","Issued"]],ed)}
+    ${selFld("Issued by","t.issuedBy",t.issuedBy,ISSUERS.map(v=>[v,v]),ed)}
+    ${fld("Ticket no(s).","t.nos",t.nos,"text",ed)}
+    ${fld("Issue date","t.date",t.date,"date",ed)}
+  </div>`+accClose;
+  return h;
+}
+function costHtml(f,c){
+  if(!can.seeCost(f))return"";
+  let h=accOpen("cost","Supplier & cost",esc(supNames(f)||"No supplier yet")+" · "+(c.pending?"cost pending":"<b>"+inr(c.cost)+"</b>"),"conf");
+  if(f.salesKnows&&role!=="sales")h+=`<div>${chip("DMC and net rate entered by Sales","plain")}</div>`;
+  const edAny=can.editCostBase(f);
+  if(f.service==="tour"){
+    const lockMode=f.schedule.some(x=>x.pay.st!=="open");
+    h+=`<div><span class="lbl">How is this package supplied?</span><div class="seg" role="group" aria-label="Supply method" style="margin-top:6px">
+      <button data-act="mode" data-m="single" aria-pressed="${f.costMode==="single"}" ${edAny&&!lockMode?"":"disabled"}><b>Through DMC</b><small>One net price from the DMC</small></button>
+      <button data-act="mode" data-m="lines" aria-pressed="${f.costMode==="lines"}" ${edAny&&!lockMode?"":"disabled"}><b>Self DMC</b><small>We book flights, hotels, car etc. ourselves</small></button></div></div>`;
+  }
+  if(f.costMode==="single"){
+    const s=f.single,cfg=singleCfg(f),ed=canEditItem(f,"s");
+    if(s.supText&&!s.sup)h+=`<div class="note warn"><p style="margin:0 0 8px">Sales mentioned <b>${esc(s.supText)}</b>, which is not in your DMC list yet.</p>${can.editSupplier()?`<button class="btn small ghost" data-act="supFromText">Add “${esc(s.supText)}” to the DMC list</button>`:""}</div>`;
+    h+=`<div class="grid">
+      ${selFld(cfg.sup,"s.sup",s.sup,supOpts(cfg.types,ed),ed,{sup:true})}
+      ${fld(cfg.ref,"s.ref",s.ref,"text",ed)}
+      ${fld(cfg.net,"s.net",s.pending?"":s.net,"number",ed,{money:true,disabled:s.pending,ph:s.pending?"Pending":"₹"})}</div>`;
+    if(ed)h+=tickBox("x-s-pending","s.pending",s.pending,"Net price pending","Net price not received yet. Proceed and add it later.");
+    else if(s.pending)h+=`<div>${chip("Net price pending","warn")}</div>`;
+  }else{
+    const anyEd=f.lines.some(l=>canEditItem(f,l.id));
+    h+=`<div class="tbl"><table class="lines"><thead><tr><th>Cost type</th><th>Supplier</th><th>Reference</th><th class="num">Amount</th>${anyEd?'<th><span hidden>Remove</span></th>':""}</tr></thead><tbody>`;
+    if(!f.lines.length)h+=`<tr><td colspan="5" class="emptyrow">No costs added yet.</td></tr>`;
+    f.lines.forEach((l,i)=>{
+      const ed=canEditItem(f,l.id),n=i+1;
+      if(ed)h+=`<tr><td><select id="x-l-${l.id}-cat" data-p="l.${l.id}.cat" data-o="${esc(l.cat)}" data-lab="Line ${n} cost type" aria-label="Cost type">${CATS.map(v=>`<option ${v===l.cat?"selected":""}>${esc(v)}</option>`).join("")}</select></td>
+        <td><select id="x-l-${l.id}-sup" data-p="l.${l.id}.sup" data-o="${esc(l.sup)}" data-sup data-lab="Line ${n} supplier" aria-label="Supplier">${supOpts(null,true).map(o=>`<option value="${esc(o[0])}" ${o[0]===l.sup?"selected":""}>${esc(o[1])}</option>`).join("")}</select></td>
+        <td><input id="x-l-${l.id}-ref" data-p="l.${l.id}.ref" data-o="${esc(l.ref)}" data-lab="Line ${n} reference" value="${esc(l.ref)}" aria-label="Reference" placeholder="PNR / conf. no."></td>
+        <td><input id="x-l-${l.id}-amount" class="num" type="number" min="0" step="any" data-num data-money data-p="l.${l.id}.amount" data-o="${l.amount||""}" data-lab="Line ${n} amount (${esc(l.cat)})" value="${l.amount||""}" aria-label="Amount" placeholder="₹"></td>
+        <td>${itemLocked(f,l.id)?"":`<button class="icon" data-act="delLine" data-id="${l.id}" aria-label="Remove cost line">×</button>`}</td></tr>`;
+      else h+=`<tr><td>${esc(l.cat)}</td><td>${esc(supName(l.sup))}</td><td class="mono">${esc(l.ref)||"—"}</td><td class="num">${inr(l.amount)}</td>${anyEd?"<td></td>":""}</tr>`;
+    });
+    h+=`</tbody></table></div>`;
+    if(edAny)h+=`<div><button class="btn ghost small" data-act="addLine">+ Add cost line</button></div>`;
+  }
+  if(edAny)h+=newSupBox(f.service==="flight"?(isGroup(f)?"Airline / group fare":"Flight portal"):(f.service==="hotel"?"Hotel / online":(f.service==="visa"?"Visa":"DMC")));
+  h+=`<div class="totline"><span>Total supplier cost</span><b>${c.pending?"Pending":inr(c.cost)}</b></div>`+accClose;
+  return h;
+}
+function scheduleHtml(f,c){
+  const ed=can.editSchedule(),items=itemsOf(f);
+  let h=accOpen("sched","Supplier payment schedule",`Paid <b class="okt">${inr(c.paid)}</b> · Still to pay <b class="owed">${inr(Math.max((c.cost||0)-c.paid,0))}</b>${c.unsched?` · <span class="warnt">${inr(c.unsched)} has no date</span>`:""}${c.overdue?` · <span class="badt">${c.overdue} overdue</span>`:""}`,"conf")+`
+    ${fld("Payment terms / cancellation policy for this booking","f.terms",f.terms,"text",ed,{wide:true,lab:"Payment terms",ph:"e.g. 50% on confirmation, balance 10 days before travel"})}`;
+  const checks=items.filter(it=>it.amount!=null&&it.amount>0).map(it=>{
+    const sch=sum(f.schedule.filter(x=>x.item===it.id),x=>x.amount),d=it.amount-sch;
+    const name=supName(it.sup)!=="—"?supName(it.sup):it.label;
+    if(d===0)return`<li>${chip("Scheduled","ok")} ${esc(name)}: ${inr(it.amount)}</li>`;
+    if(d>0)return`<li>${chip("Not scheduled","warn")} ${esc(name)}: ${inr(d)} of ${inr(it.amount)} has no payment date</li>`;
+    return`<li>${chip("Check","bad")} ${esc(name)}: schedule is ${inr(-d)} more than the cost</li>`;
+  });
+  if(c.pending&&f.costMode==="single")h+=`<p class="note warn">Add the net price first, then set the payment dates.</p>`;
+  if(checks.length)h+=`<ul class="checks">${checks.join("")}</ul>`;
+  h+=`<div class="tbl"><table class="sch"><thead><tr><th>Supplier · item</th><th class="num">Amount</th><th>Pay by</th><th>Status</th>${ed?'<th><span hidden>Remove</span></th>':""}</tr></thead><tbody>`;
+  if(!f.schedule.length)h+=`<tr><td colspan="5" class="emptyrow">No payment dates set yet.</td></tr>`;
+  f.schedule.forEach(x=>{
+    const it=itemOf(f,x.item);if(!it)return;
+    const e=ed&&x.pay.st==="open";
+    h+=`<tr><td>${esc(supName(it.sup))}<br><small class="muted">${esc(it.label)}</small></td>
+      <td class="num">${e?`<input class="num" type="number" min="0" step="any" id="x-sch-${x.id}-amount" data-p="sch.${x.id}.amount" data-o="${x.amount||""}" data-num data-money data-lab="Payment amount (${esc(supName(it.sup))})" value="${x.amount||""}" aria-label="Amount">`:inr(x.amount)}</td>
+      <td>${e?`<input type="date" id="x-sch-${x.id}-due" data-p="sch.${x.id}.due" data-o="${esc(x.due)}" data-lab="Pay-by date (${esc(supName(it.sup))})" value="${esc(x.due)}" aria-label="Pay by">`+(x.due&&x.due<today()?`<br>${chip("Overdue","bad")}`:""):dueHtml(x)}</td>
+      <td>${payCell(f,x)}</td>${ed?`<td>${x.pay.st==="open"?`<button class="icon" data-act="delSch" data-id="${x.id}" aria-label="Remove payment">×</button>`:""}</td>`:""}</tr>`;
+  });
+  h+=`</tbody></table></div>`;
+  const opts=items.filter(it=>it.amount!=null&&it.amount>0);
+  if(ed&&opts.length)h+=`<div class="addrow"><select id="ns-item" aria-label="Supplier item">${opts.map(it=>`<option value="${it.id}">${esc(supName(it.sup)!=="—"?supName(it.sup):it.label)}</option>`).join("")}</select><input type="number" id="ns-amt" min="0" placeholder="Amount ₹ (blank = rest)" aria-label="Amount"><input type="date" id="ns-due" aria-label="Pay by"><button class="btn small" data-act="addSch">Add payment date</button></div>`;
+  return h+accClose;
+}
+
+/* ---------- payments ---------- */
+function renderPayments(){
+  const ai=allInst().sort((a,b)=>String(a.x.due||"9").localeCompare(String(b.x.due||"9")));
+  const rows=(arr,bank)=>arr.map(({f,x,it})=>{const sp=supById(it.sup);return`<tr><td><span class="cname">${esc(f.client)}</span><span class="sub">${f.id}</span></td>
+    <td>${esc(supName(it.sup))}${sp&&sp.pendingBank?" "+chip("Bank change pending","warn"):""}<span class="sub">${esc(it.label)}</span>${bank?`<details class="bankd"><summary>Bank details</summary>${payTo(it.sup)}</details>`:""}</td>
+    <td class="num"><b class="owed">${inr(x.amount)}</b></td><td>${dueHtml(x)}</td><td>${payCell(f,x)}</td></tr>`}).join("");
+  const table=(arr,empty,bank)=>`<div class="tbl"><table class="pay"><thead><tr><th>Booking</th><th>Supplier</th><th class="num">Amount</th><th>Pay by</th><th>Action</th></tr></thead><tbody>${arr.length?rows(arr,bank):`<tr><td colspan="5" class="emptyrow">${empty}</td></tr>`}</tbody></table></div>`;
+  const approved=ai.filter(a=>a.x.pay.st==="approved"),opn=ai.filter(a=>a.x.pay.st==="open"),paid=ai.filter(a=>a.x.pay.st==="paid").reverse();
+  const unsched=S.files.filter(f=>f.submitted).map(f=>({f,c:calc(f)})).filter(o=>o.c.unsched>0);
+  const tot=a=>inr(sum(a,o=>o.x.amount)),cnt=(a,w)=>`${a.length} ${w}${a.length===1?"":"s"}`;
+  const od=a=>a.filter(o=>o.x.due&&o.x.due<today()).length;
+  const secA=pgSec("pay-appr","Approved · to pay",`${cnt(approved,"payment")} · <b class="owed">${tot(approved)}</b>${od(approved)?` · <span class="badt">${od(approved)} overdue</span>`:""}`,`<p>Operations approved these. Accounts pays and enters the payment reference.</p>${table(approved,"Nothing waiting for payment.",true)}`);
+  const secO=pgSec("pay-open","Waiting for Operations approval",`${cnt(opn,"payment")} · ${tot(opn)}${od(opn)?` · <span class="badt">${od(opn)} overdue</span>`:""}`,`<p>${can.approve()?"Approve each payment when it is due.":"Accounts can pay these after Operations approves them."}</p>${table(opn,"Nothing waiting for approval.",false)}`);
+  const secU=unsched.length?pgSec("pay-nodate","No payment date yet",`${unsched.length} booking${unsched.length===1?"":"s"} · ${inr(sum(unsched,o=>o.c.unsched))}`,`<p>Operations need to add payment dates in these booking files.</p><ul class="checks">${unsched.map(o=>`<li>${chip(inr(o.c.unsched),"warn")} <button class="linkbtn" data-act="pick" data-goto="bookings" data-id="${o.f.id}">${o.f.id} · ${esc(o.f.client)}</button></li>`).join("")}</ul>`):"";
+  const secP=pgSec("pay-paid","Paid",`${cnt(paid,"payment")} · <b class="okt">${tot(paid)}</b>`,table(paid,"No payments yet.",true));
+  $("#view").innerHTML=`<div style="display:flex;flex-direction:column;gap:12px"><div class="listbar"><h2>Supplier payments</h2>${expBtns("payments")}</div>${role==="ops"?secO+secU+secA:secA+secO+secU}${secP}${legendHtml()}</div>`;
+}
+
+/* ---------- today (Accounts home) ---------- */
+function todayData(){
+  const fs=S.files.filter(f=>f.submitted);
+  const recs=[];fs.forEach(f=>f.receipts.forEach((r,i)=>{if(!r.verified)recs.push({f,r,i})}));
+  const pays=allInst().filter(a=>a.x.pay.st==="approved").sort((a,b)=>String(a.x.due||"9").localeCompare(String(b.x.due||"9")));
+  const inv=fs.map(f=>({f,c:calc(f)})).filter(o=>!o.c.pending&&o.c.recV>0&&(!o.f.invoiceNo||!o.f.vyapar));
+  const banks=S.suppliers.filter(s=>s.pendingBank&&s.pendingBank.role!==role);
+  return{recs,pays,inv,banks,total:recs.length+pays.length+inv.length+banks.length};
+}
+function renderToday(){
+  const d=todayData(),hr=new Date().getHours(),greet=hr<12?"Good morning":(hr<17?"Good afternoon":"Good evening");
+  const openL=(f)=>`<button class="linkbtn" data-act="pick" data-goto="bookings" data-id="${f.id}" style="text-align:left">${esc(f.client)}</button><span class="sub">${f.id}</span>`;
+  const step=(n,id,title,count,sub,body)=>pgSec(id,`<span class="stepn">${n}</span>${title}`,count?sub:'<span class="okt">All done</span>',count?body:'<p class="muted" style="margin:0">Nothing to do here.</p>',count>0&&n===(d.recs.length?1:d.pays.length?2:d.inv.length?3:4));
+  const A=`<p class="muted" style="margin:0">Check each amount reached the bank, then mark it verified.</p><div class="tbl"><table class="todo"><thead><tr><th>Client</th><th>Date</th><th class="num">Amount</th><th>Mode · reference</th><th>Collected by</th><th></th></tr></thead><tbody>${d.recs.map(({f,r,i})=>`<tr><td>${openL(f)}</td><td class="nw">${fdate(r.date)}</td><td class="num"><b class="okt">${inr(r.amount)}</b></td><td>${esc(r.mode)}<span class="sub mono">${esc(r.ref||"—")}</span></td><td>${esc(r.by||"—")}</td><td><button class="btn small" data-act="verifyRec" data-file="${f.id}" data-i="${i}">Mark verified</button></td></tr>`).join("")}</tbody></table></div>`;
+  const B=`<p class="muted" style="margin:0">Operations approved these. Pay to the account shown, then enter the UTR or reference.</p><div class="tbl"><table class="todo"><thead><tr><th>Supplier</th><th class="num">Amount</th><th>Pay by</th><th>Pay to</th><th></th></tr></thead><tbody>${d.pays.map(({f,x,it})=>`<tr><td><b>${esc(supName(it.sup))}</b><span class="sub">${esc(f.client)} · ${f.id}</span></td><td class="num"><b class="owed">${inr(x.amount)}</b></td><td>${dueHtml(x)}</td><td>${payTo(it.sup)}</td><td>${payCell(f,x)}</td></tr>`).join("")}</tbody></table></div>`;
+  const C=`<p class="muted" style="margin:0">Cost is final and the advance is in. Enter the invoice number and tick Vyapar when it is entered there.</p><div class="tbl"><table class="todo"><thead><tr><th>Client</th><th class="num">Price</th><th class="num conf">Markup</th><th>Invoice</th></tr></thead><tbody>${d.inv.map(({f,c})=>`<tr><td>${openL(f)}</td><td class="num">${inr(c.sell)}</td><td class="num conf"><b>${inr(c.margin)}</b></td><td><div class="invrow"><input type="text" id="inv-${f.id}" value="${esc(f.invoiceNo)}" placeholder="Invoice no." aria-label="Invoice number for ${esc(f.client)}"><label class="tick"><input type="checkbox" id="vy-${f.id}" ${f.vyapar?"checked":""}> In Vyapar</label><button class="btn small" data-act="saveInv" data-id="${f.id}">Save</button></div></td></tr>`).join("")}</tbody></table></div>`;
+  const D=`<p class="muted" style="margin:0">Another team changed a supplier's bank account. Check it with the supplier before approving.</p><ul class="mlist">${d.banks.map(s=>`<li><span><b>${esc(s.name)}</b> <small class="muted">· requested by ${esc(s.pendingBank.by)}, ${fdate(s.pendingBank.at)}</small></span><button class="btn small ghost" data-act="pickSup" data-goto="suppliers" data-id="${s.id}">Review</button></li>`).join("")}</ul>`;
+  $("#view").innerHTML=`<div style="display:flex;flex-direction:column;gap:12px">
+    <div class="hello"><h2>${greet}. ${d.total?`${d.total} thing${d.total===1?"":"s"} need${d.total===1?"s":""} you today.`:"You are all caught up."}</h2><span class="muted">Open a task below. Complete it, then move to the next.</span></div>
+    ${step(1,"td-rec","Check client payments",d.recs.length,`<b>${d.recs.length}</b> to verify · <b class="okt">${inr(sum(d.recs,o=>o.r.amount))}</b>`,A)}
+    ${step(2,"td-pay","Pay suppliers",d.pays.length,`<b>${d.pays.length}</b> approved · <b class="owed">${inr(sum(d.pays,o=>o.x.amount))}</b>${d.pays.some(o=>o.x.due&&o.x.due<today())?' · <span class="badt">overdue</span>':""}`,B)}
+    ${step(3,"td-inv","Raise invoices",d.inv.length,`<b>${d.inv.length}</b> booking${d.inv.length===1?"":"s"} ready`,C)}
+    ${step(4,"td-bank","Approve bank changes",d.banks.length,`<b>${d.banks.length}</b> waiting`,D)}
+    <p class="muted" style="margin:4px 0 0">More: <button class="linkbtn" data-act="tab" data-t="cash">Money in & out</button> · <button class="linkbtn" data-act="tab" data-t="profit">Profit & markup</button> · <button class="linkbtn" data-act="tab" data-t="suppliers">DMCs & suppliers</button></p>
+  </div>`;
+}
+
+/* ---------- receipts & payments (cash book) ---------- */
+function cashRows(){
+  const out=[];
+  S.files.filter(f=>f.submitted).forEach(f=>{
+    f.receipts.forEach((r,i)=>out.push({date:r.date,dir:"in",f,i,party:f.client,item:"Client payment",amount:+r.amount||0,mode:r.mode,ref:r.ref,by:r.by,ok:!!r.verified}));
+    f.schedule.forEach(x=>{if(x.pay.st!=="paid")return;const it=itemOf(f,x.item),sp=it?supById(it.sup):null;out.push({date:x.pay.paidAt,dir:"out",f,party:it?supName(it.sup):"Supplier",item:it?it.label:"",amount:+x.amount||0,mode:sp?sp.payBy:"",ref:x.pay.ref,by:x.pay.payBy,ok:true})});
+  });
+  return out.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+}
+function cashFiltered(){
+  let r=cashRows();
+  if(cbType==="in")r=r.filter(x=>x.dir==="in");else if(cbType==="out")r=r.filter(x=>x.dir==="out");else if(cbType==="check")r=r.filter(x=>x.dir==="in"&&!x.ok);
+  if(cbMonth!=="all")r=r.filter(x=>String(x.date).slice(0,7)===cbMonth);
+  return r;
+}
+const monthName=ym=>new Date(ym+"-01T00:00:00").toLocaleDateString("en-IN",{month:"long",year:"numeric"});
+function renderCashbook(){
+  const all=cashRows(),rows=cashFiltered();
+  const months=[...new Set(all.map(x=>String(x.date).slice(0,7)))].sort().reverse();
+  const tin=sum(rows.filter(x=>x.dir==="in"),x=>x.amount),tout=sum(rows.filter(x=>x.dir==="out"),x=>x.amount);
+  const chk=all.filter(x=>x.dir==="in"&&!x.ok);
+  const fb=(v,l)=>`<button class="fbtn" data-act="cbType" data-v="${v}" aria-pressed="${cbType===v}">${l}</button>`;
+  const body=rows.length?rows.map(x=>`<tr class="rowlink" data-act="pick" data-goto="bookings" data-id="${x.f.id}" tabindex="0">
+    <td class="nw">${fdate(x.date)}</td>
+    <td>${x.dir==="in"?chip("Receipt","ok"):chip("Payment","owed")}</td>
+    <td><span class="cname">${esc(x.party)}</span><span class="sub">${x.f.id}${x.dir==="out"&&x.item?" · "+esc(x.item):""}</span></td>
+    <td class="num">${x.dir==="in"?`<span class="amt-in">+ ${inr(x.amount)}</span>`:`<span class="amt-out">− ${inr(x.amount)}</span>`}</td>
+    ${moreCols?`<td>${esc(x.mode||"—")}</td><td class="mono">${esc(x.ref||"—")}</td><td>${esc(x.by||"—")}</td>`:""}
+    <td>${x.dir==="out"?chip("Paid","ok"):(x.ok?chip("Verified","ok"):(can.verify()?`<button class="btn small ghost" data-act="verifyRec" data-file="${x.f.id}" data-i="${x.i}">Mark verified</button>`:chip("Not checked yet","warn")))}</td></tr>`).join(""):`<tr><td colspan="${moreCols?8:5}" class="emptyrow">No entries for this filter.</td></tr>`;
+  $("#view").innerHTML=`<div style="display:flex;flex-direction:column;gap:14px">
+    <div class="listbar"><h2>Receipts & payments</h2>${expBtns("cash")}</div>
+    <div class="stats">
+      <div class="stat"><span>Money in</span><b class="okt">${inr(tin)}</b></div>
+      <div class="stat"><span>Money out</span><b class="owed">${inr(tout)}</b></div>
+      <div class="stat"><span>Net</span><b>${inr(tin-tout)}</b></div>
+      <div class="stat"><span>Receipts to verify</span><b class="${chk.length?"badt":""}">${chk.length} · ${inr(sum(chk,x=>x.amount))}</b></div>
+    </div>
+    <div class="listbar"><div class="filters" role="group" aria-label="Show" style="margin:0">${fb("all","All")}${fb("in","Receipts (money in)")}${fb("out","Payments (money out)")}${fb("check",`To verify (${chk.length})`)}</div>
+      <div class="listtools"><label class="lbl" for="cb-month">Month</label><select id="cb-month" class="selsm"><option value="all">All months</option>${months.map(m=>`<option value="${m}" ${cbMonth===m?"selected":""}>${monthName(m)}</option>`).join("")}</select></div></div>
+    <div class="tbl"><table class="cash"><thead><tr><th>Date</th><th>Type</th><th>From / to</th><th class="num">Amount</th>${moreCols?"<th>Mode</th><th>Reference</th><th>Recorded by</th>":""}<th>Status</th></tr></thead><tbody>${body}</tbody></table></div>
+    <div class="listbar"><div class="row"><span class="muted">Payments to suppliers appear here once Accounts marks them paid. Click a row to open the booking.</span><button class="linkbtn" data-act="moreCols">${moreCols?"Show less":"More details"}</button></div></div>
+    ${legendHtml()}</div>`;
+}
+/* ---------- suppliers ---------- */
+function renderSuppliers(){
+  if(!supById(selSup))selSup=S.suppliers.length?S.suppliers[0].id:null;
+  let list="";
+  SUPTYPES.forEach(t=>{
+    const g=S.suppliers.filter(s=>s.type===t).sort((a,b)=>a.name.localeCompare(b.name));
+    if(!g.length)return;
+    list+=`<div class="group">${t}</div>`+g.map(s=>`<button class="item" data-act="pickSup" data-id="${s.id}" aria-current="${s.id===selSup}"><div class="row1"><span class="nm">${esc(s.name||"New supplier")}</span>${s.pendingBank?chip("Bank change pending","warn"):(s.payBy==="Bank transfer"&&!s.accNo?chip("No bank details","warn"):"")}</div><div class="ds">${esc(s.payBy)}${s.country?" · "+esc(s.country):""}</div></button>`).join("");
+  });
+  const s=supById(selSup);let d=`<div class="empty">Select a supplier.</div>`;
+  if(s){
+    const ed=can.editSupplier(),p=k=>"sup."+s.id+"."+k,used=S.files.filter(f=>f.single.sup===s.id||f.lines.some(l=>l.sup===s.id)).length;
+    d=`<header class="dhead"><div><div class="fid">${esc(s.type)}</div><h2>${esc(s.name||"New supplier")}</h2><p class="muted">Used in ${used} booking file${used===1?"":"s"}</p></div></header>
+    ${accOpen("sup-info","Supplier details",[esc(s.payBy),s.contact?esc(s.contact):"",s.phone?esc(s.phone):"",s.notes?esc(s.notes):""].filter(Boolean).join(" · "),"",true)}<div class="grid">
+      ${fld("Name",p("name"),s.name,"text",ed)}
+      ${selFld("Type",p("type"),s.type,SUPTYPES.map(v=>[v,v]),ed)}
+      ${selFld("How we pay",p("payBy"),s.payBy,PAYBY.map(v=>[v,v]),ed)}
+      ${fld("Country",p("country"),s.country,"text",ed)}
+      ${fld("Contact person",p("contact"),s.contact,"text",ed)}
+      ${fld("Phone / WhatsApp",p("phone"),s.phone,"tel",ed)}
+      ${fld("Email",p("email"),s.email,"email",ed)}
+      ${fld("Usual payment terms",p("notes"),s.notes,"text",ed,{wide:true,ph:"e.g. 50% on confirmation, balance 15 days before travel"})}</div>${accClose}
+    ${bankHtml(s)}
+    ${can.seeLog()?(()=>{const hs=S.log.filter(e=>e.tid===s.id);return accOpen("sup-hist","Change history",hs.length?hs.length+" changes":"No changes yet")+histHtml(hs)+accClose})():""}`;
+  }
+  $("#view").innerHTML=`<div class="main"><aside><div class="listhead"><h2>DMCs, portals & suppliers</h2>${can.editSupplier()?`<button class="btn small" data-act="addSup">+ Add DMC / supplier</button>`:""}</div><p class="muted" style="margin:0 0 10px;font-size:13px">Add a DMC once with its bank details, then pick it in any booking.</p><div class="list">${list}</div></aside><article class="panel" aria-live="polite">${d}</article></div>`;
+}
+function approverText(pb){return pb.role==="ops"?"Accounts":(pb.role==="accounts"?"Operations":"Operations or Accounts")}
+function bankHtml(s){
+  const bsub=s.pendingBank?'<span class="warnt">Change waiting for approval</span>':(s.accNo?esc(s.bank)+" · ending "+esc(String(s.accNo).slice(-4)):(s.payBy==="Bank transfer"?'<span class="warnt">Not added</span>':esc(s.payBy)));
+  let h=accOpen("sup-bank","Bank details",bsub,"",!!s.pendingBank||bankEdit===s.id);
+  if(bankEdit===s.id){
+    const other=role==="ops"?"Accounts":(role==="accounts"?"Operations":"Operations or Accounts");
+    return h+`<p class="note info">${other} must approve this change before it is used for payments.</p><div class="grid">${BANKF.map(([k,l])=>`<label class="fld" for="bk-${k}"><span>${l}</span><input id="bk-${k}" value="${esc(s[k])}"></label>`).join("")}</div><div class="row"><button class="btn small" data-act="bankSend">Send for approval</button><button class="linkbtn" data-act="bankCancel">Cancel</button></div>`+accClose;
+  }
+  h+=s.accNo?`<div class="grid">${BANKF.map(([k,l])=>fld(l,"",s[k],"text",false)).join("")}</div>`:`<p class="muted" style="margin:0">No approved bank details yet.</p>`;
+  const pb=s.pendingBank;
+  if(pb){
+    const decide=can.editSupplier()&&role!==pb.role;
+    h+=`<div class="pending"><p>${chip("Waiting for approval","warn")} Change requested by <b>${esc(pb.by)}</b> (${esc(ROLES[pb.role].label)}) on ${fdate(pb.at)}. ${approverText(pb)} must approve it.</p>
+      <div class="tbl"><table class="bk"><thead><tr><th>Field</th><th>Current</th><th>Requested</th></tr></thead><tbody>${BANKF.map(([k,l])=>`<tr class="${(s[k]||"")!==(pb.data[k]||"")?"chg":""}"><td>${l}</td><td class="mono">${esc(s[k]||"—")}</td><td class="mono">${esc(pb.data[k]||"—")}</td></tr>`).join("")}</tbody></table></div>
+      <div class="row">${decide?`<button class="btn small" data-act="bankApprove">Approve change</button><button class="btn small danger" data-act="bankReject">Reject</button>`:""}${role===pb.role?`<button class="btn small ghost" data-act="bankWithdraw">Withdraw request</button>`:""}${!decide&&role!==pb.role?`<span class="muted">Waiting for ${approverText(pb)}.</span>`:""}</div></div>`;
+  }else if(can.editSupplier())h+=`<div><button class="btn small ghost" data-act="bankEdit">${s.accNo?"Change bank details":"Add bank details"}</button></div>`;
+  return h+accClose;
+}
+
+/* ---------- log ---------- */
+function renderLog(){
+  const lg=S.log.slice().reverse(),lim=logAll?lg:lg.slice(0,15);
+  const rows=lim.map(e=>`<tr><td>${ftime(e.t)}</td><td>${esc(e.who)}<br><small class="muted">${esc(e.role)}</small></td><td class="fid">${esc(e.tl)}</td><td>${esc(e.field)}</td><td class="chgv">${e.from!==undefined?`<s>${esc(e.from)}</s> → ${esc(e.to)}`:esc(e.to||"")}</td></tr>`).join("");
+  $("#view").innerHTML=`<section class="paysec"><h2>Change log</h2><p>Every saved change to bookings, prices, costs, payments, payment dates and supplier details, with who made it and when.</p><div class="tbl"><table class="log"><thead><tr><th>When</th><th>Who</th><th>File / supplier</th><th>What changed</th><th>From → to</th></tr></thead><tbody>${rows||'<tr><td colspan="5" class="emptyrow">No changes yet.</td></tr>'}</tbody></table></div>${lg.length>15?`<div><button class="linkbtn" data-act="logAll">${logAll?"Show latest 15 only":"Show all "+lg.length+" changes"}</button></div>`:""}</section>`;
+}
+
+function renderAll(){
+  renderTop();renderStats();
+  if(tab==="payments")renderPayments();else if(tab==="suppliers")renderSuppliers();else if(tab==="log")renderLog();else if(tab==="rules")renderRules();else if(tab==="profit")renderProfit();else if(tab==="cash")renderCashbook();else if(tab==="today")renderToday();else renderBookings();
+  $("#stats").hidden=!(tab==="bookings"&&!open&&!newMode);
+  updateBar();syncExport();persistNav();
+}
+
+/* ---------- save / dirty ---------- */
+const curVal=el=>el.type==="checkbox"?(el.checked?"1":"0"):el.value;
+function dirtyEls(){return[...document.querySelectorAll("[data-p]")].filter(el=>curVal(el)!==(el.dataset.o||"").replace(/^true$/,"1").replace(/^false$/,"0"))}
+function updateBar(){
+  const n=dirtyEls().length,bar=$("#savebar");
+  bar.hidden=!n;bar.classList.remove("flash");
+  if(n)$("#sbmsg").textContent=`You have unsaved changes (${n})`;
+}
+function resolve(p){
+  const a=p.split(".");
+  if(a[0]==="set")return{obj:S,key:a[1],tid:"rules",tl:"Access rules"};
+  if(a[0]==="rule")return{obj:S.rules,key:a[1],tid:"rules",tl:"Access rules"};
+  if(a[0]==="sup"){const s=supById(a[1]);return s&&{obj:s,key:a[2],tid:s.id,tl:s.name||"New supplier"}}
+  const f=cur();if(!f)return null;const b={tid:f.id,tl:f.id,f};
+  if(a[0]==="f")return Object.assign(b,{obj:f,key:a[1]});
+  if(a[0]==="s")return Object.assign(b,{obj:f.single,key:a[1]});
+  if(a[0]==="t")return Object.assign(b,{obj:f.ticket,key:a[1]});
+  if(a[0]==="l"){const l=f.lines.find(x=>x.id===a[1]);return l&&Object.assign(b,{obj:l,key:a[2]})}
+  if(a[0]==="sch"){const x=f.schedule.find(y=>y.id===a[1]);return x&&Object.assign(b,{obj:x,key:a[2]})}
+  if(a[0]==="r"){const r=f.receipts[+a[1]];return r&&Object.assign(b,{obj:r,key:a[2]})}
+  return null;
+}
+function fmtV(v,t){
+  if(t.type==="checkbox")return v?"Yes":"No";
+  if(t.dataset.money!=null)return inr(v);
+  if(t.dataset.sup!=null)return v?supName(v):"—";
+  if(t.type==="date")return fdate(v);
+  return(v==null||v==="")?"—":String(v);
+}
+function commit(){
+  const els=dirtyEls();let n=0;const touched=new Set();
+  els.forEach(el=>{
+    const p=el.dataset.p,r=resolve(p);if(!r)return;
+    if(p==="s.supName"){
+      const v=el.value.trim(),m=S.suppliers.find(s=>s.name.toLowerCase()===v.toLowerCase()),s=r.f.single;
+      const old=s.sup?supName(s.sup):(s.supText||"");
+      s.sup=m?m.id:"";s.supText=m?"":v;log(r.tid,r.tl,el.dataset.lab,old||"—",v||"—");n++;touched.add(r.f);return;
+    }
+    const v=el.type==="checkbox"?el.checked:(el.dataset.num!=null?(el.value===""?null:+el.value):el.value);
+    const old=r.obj[r.key];
+    r.obj[r.key]=v;n++;if(r.f)touched.add(r.f);
+    log(r.tid,p.startsWith("sup.")&&r.key==="name"?(v||"New supplier"):r.tl,el.dataset.lab||r.key,fmtV(old,el),fmtV(v,el));
+    if(p==="t.status"&&v==="Issued"&&r.f&&!r.f.ticket.date)r.f.ticket.date=today();
+  });
+  touched.forEach(f=>{if(role==="sales"&&f.salesKnows&&f.service==="tour")f.costMode="single"});
+  if(n)save();
+  return n;
+}
+function onEdit(e){
+  const t=e.target;
+  if(t.tagName==="SELECT"&&t.value==="__new"){const box=$("#newsup");t.value=t.dataset.o||"";if(box){box.hidden=false;box.dataset.target=t.dataset.p;const n=$("#nsup-name");if(n)n.focus()}}
+  if(t.id==="x-f-salesKnows"){const k=$("#knowsFields");if(k)k.hidden=!t.checked}
+  if(t.id==="x-s-pending"){const n=document.getElementById(idOf("s.net"));if(n){n.disabled=t.checked;if(t.checked)n.value=""}}
+  if(t.dataset&&t.dataset.p!=null)updateBar();
+}
+document.addEventListener("input",onEdit);
+document.addEventListener("change",onEdit);
+document.addEventListener("input",e=>{if(e.target.id==="q"){q=e.target.value;const r=$("#rows");if(r)r.innerHTML=listRows()}});
+document.addEventListener("change",e=>{if(e.target.id==="pf-svc"){profitSvc=e.target.value;renderAll()}if(e.target.id==="cb-month"){cbMonth=e.target.value;renderAll()}});
+document.addEventListener("keydown",e=>{if((e.key==="Enter"||e.key===" ")&&e.target.matches&&e.target.matches("tr.rowlink")){e.preventDefault();e.target.click()}});
+
+/* ---------- actions ---------- */
+function getInst(b){
+  const f=S.files.find(x=>x.id===b.dataset.file);if(!f)return null;
+  const x=f.schedule.find(y=>y.id===b.dataset.inst);const it=x&&itemOf(f,x.item);
+  return x&&it?{f,x,it}:null;
+}
+const NAV=["role","tab","pick","new","cancelNew","pickSup","addSup","filter","back","cbType","moreCols","moreStats","moreProfit","logAll"];
+document.addEventListener("click",e=>{
+  const b=e.target.closest("[data-act]");if(!b)return;
+  const act=b.dataset.act;
+  if(act==="saveAll"){const f=cur(),n=commit();renderAll();toast(n?(f&&!f.submitted&&tab==="bookings"?"Draft saved. Submit it when it is ready.":"Saved on this PC."):"Nothing to save.");return}
+  if(act==="discard"){renderAll();toast("Changes discarded.");return}
+  if(act==="export"){doExport(b.dataset.kind,b.dataset.fmt);return}
+  if(act==="focus"){const el=document.getElementById(b.dataset.target);if(el){const d=el.closest("details");if(d)d.open=true;el.scrollIntoView({behavior:"smooth",block:"center"});el.focus({preventScroll:true})}return}
+  if(NAV.includes(act)&&dirtyEls().length){const bar=$("#savebar");bar.hidden=false;bar.classList.add("flash");$("#sbmsg").textContent="Save or discard your changes first";return}
+  if(!NAV.includes(act)&&dirtyEls().length)commit();
+  switch(act){
+    case"role":{if(role===b.dataset.r)return;if(!newMode)stash();role=b.dataset.r;tab=lastTab[role]||(isAcc()?"today":"bookings");const y=unstash();renderAll();go(y);return;}
+    case"tab":{if(tab===b.dataset.t&&!open&&!newMode)return;if(!newMode)stash();tab=b.dataset.t;const y=unstash();renderAll();go(y);return;}
+    case"filter":listFilter=b.dataset.v;renderAll();return;
+    case"moreCols":moreCols=!moreCols;renderAll();return;
+    case"moreStats":moreStats=!moreStats;renderAll();return;
+    case"moreProfit":moreProfit=!moreProfit;renderAll();return;
+    case"logAll":logAll=!logAll;renderAll();return;
+    case"cbType":cbType=b.dataset.v;renderAll();return;
+    case"saveInv":{const f=S.files.find(x=>x.id===b.dataset.id);if(!f)return;const no=($("#inv-"+f.id).value||"").trim(),vy=$("#vy-"+f.id).checked;
+      if(!no){$("#inv-"+f.id).focus();$("#inv-"+f.id).placeholder="Enter the invoice no.";return}
+      if(no!==f.invoiceNo){log(f.id,f.id,"Invoice no.",f.invoiceNo||"—",no);f.invoiceNo=no}
+      if(vy!==!!f.vyapar){log(f.id,f.id,"Entered in Vyapar",f.vyapar?"Yes":"No",vy?"Yes":"No");f.vyapar=vy}
+      save();renderAll();toast(vy?"Invoice saved and marked as entered in Vyapar.":"Invoice saved. Tick Vyapar once it is entered there.");return;}
+    case"quickSupCancel":{const box=$("#newsup");if(box)box.hidden=true;return;}
+    case"quickSup":{const box=$("#newsup"),name=($("#nsup-name").value||"").trim();if(!name){$("#nsup-name").focus();return}
+      if(S.suppliers.some(x=>x.name.toLowerCase()===name.toLowerCase())){$("#nsup-name").value="";$("#nsup-name").placeholder="That name is already in the list";$("#nsup-name").focus();return}
+      const sp={id:uid("s-"),name,type:$("#nsup-type").value,payBy:$("#nsup-pay").value,contact:"",phone:"",email:"",country:"",accName:"",bank:"",accNo:"",code:"",notes:"",pendingBank:null};
+      S.suppliers.push(sp);log(sp.id,sp.name,"Supplier added",undefined,sp.type);
+      const r=resolve(box.dataset.target||"");if(r){const old=r.obj[r.key];r.obj[r.key]=sp.id;log(r.tid,r.tl,box.dataset.target==="s.sup"?"Supplier":"Cost line supplier",old?supName(old):"—",sp.name)}
+      save();renderAll();toast(`Added ${name}. Add its bank details in DMCs & suppliers.`);return;}
+    case"supFromText":{const f=cur();if(!f||!f.single.supText)return;const name=f.single.supText.trim();
+      let sp=S.suppliers.find(x=>x.name.toLowerCase()===name.toLowerCase());
+      if(!sp){sp={id:uid("s-"),name,type:f.service==="hotel"?"Hotel / online":"DMC",payBy:"Bank transfer",contact:"",phone:"",email:"",country:"",accName:"",bank:"",accNo:"",code:"",notes:"",pendingBank:null};S.suppliers.push(sp);log(sp.id,sp.name,"Supplier added",undefined,sp.type+" (named by Sales)")}
+      f.single.sup=sp.id;f.single.supText="";log(f.id,f.id,"Supplier",name+" (typed by Sales)",sp.name);save();renderAll();toast(`${name} added to the DMC list and selected.`);return;}
+    case"verifyRec":{const f=S.files.find(x=>x.id===b.dataset.file),r=f&&f.receipts[+b.dataset.i];if(!r)return;r.verified=true;log(f.id,f.id,"Client payment "+inr(r.amount)+" verified","No","Yes");save();renderAll();toast("Marked verified.");return;}
+    case"pick":{
+      if(b.dataset.goto&&tab!==b.dataset.goto){stash();navFrom=tab;tab=b.dataset.goto}
+      else{const v=V[vk()]=V[vk()]||{};v.listScroll=window.scrollY;if(!open)navFrom=null}
+      sel=b.dataset.id;open=true;newMode=false;submitErr=null;renderAll();go(0);return;}
+    case"back":{
+      submitErr=null;open=false;
+      if(navFrom){const to=navFrom;navFrom=null;stash();tab=to;const y=unstash();renderAll();go(y);return}
+      const y=(V[vk()]||{}).listScroll||0;renderAll();go(y);return;}
+    case"new":{const v=V[vk()]=V[vk()]||{};if(!open)v.listScroll=window.scrollY;newMode=true;open=false;navFrom=null;submitErr=null;renderAll();go(0);return;}
+    case"cancelNew":newMode=false;renderAll();go((V[vk()]||{}).listScroll||0);return;
+    case"svc":{
+      const svc=b.dataset.s,year=new Date().getFullYear(),prefix="RH-"+year+"-",n=Math.max(0,...S.files.filter(x=>x.id.startsWith(prefix)).map(x=>+x.id.split("-")[2]||0))+1,id=prefix+String(n).padStart(4,"0");
+      const f={id,owner:role==="sales"?"Arjun":"Arjun",createdBy:who(),submitted:false,service:svc,client:"",mobile:"",address:"",pax:1,sell:0,receipts:[],salesKnows:false,requests:[],
+        costMode:(svc==="visa"||svc==="other")?"lines":"single",single:{sup:"",supText:"",net:null,ref:"",pending:false},lines:[],terms:"",schedule:[],invoiceNo:"",vyapar:false};
+      if(svc==="flight"){f.tripType="Return";f.fareType=role==="res"?"group":"portal";f.ticket={status:"Not issued",issuedBy:role==="res"?"Reservation Head":"Booking staff",nos:"",date:""}}
+      S.files.unshift(f);log(id,id,"Draft started",undefined,SERVICES[svc].label);
+      sel=id;newMode=false;open=true;listFilter="all";save();renderAll();go(0);const n2=$("#x-f-client");if(n2)n2.focus();return;}
+    case"pickSup":if(b.dataset.goto&&tab!==b.dataset.goto){stash();tab=b.dataset.goto;unstash();go(0)}selSup=b.dataset.id;bankEdit=null;renderAll();if(window.matchMedia("(max-width:880px)").matches){const d=$("#view .panel");if(d)d.scrollIntoView({behavior:"smooth",block:"start"})}return;
+    case"addSup":{const s={id:uid("s-"),name:"",type:"DMC",payBy:"Bank transfer",contact:"",phone:"",email:"",country:"",accName:"",bank:"",accNo:"",code:"",notes:"",pendingBank:null};
+      S.suppliers.push(s);selSup=s.id;bankEdit=null;log(s.id,"New supplier","Supplier added",undefined,"");save();renderAll();const n=$("#"+idOf("sup."+s.id+".name"));if(n)n.focus();return;}
+    case"bankEdit":bankEdit=selSup;renderAll();{const n=$("#bk-accName");if(n)n.focus()}return;
+    case"bankCancel":bankEdit=null;renderAll();return;
+    case"bankSend":{const s=supById(selSup);if(!s)return;const data={};BANKF.forEach(([k])=>data[k]=($("#bk-"+k).value||"").trim());
+      if(BANKF.every(([k])=>(s[k]||"")===data[k])){bankEdit=null;renderAll();return}
+      s.pendingBank={data,by:who(),role,at:today()};bankEdit=null;
+      log(s.id,s.name,"Bank change requested",undefined,"Sent to "+approverText(s.pendingBank)+" for approval");save();renderAll();toast("Sent to "+approverText(s.pendingBank)+" for approval.");return;}
+    case"bankApprove":case"bankReject":case"bankWithdraw":{const s=supById(selSup);if(!s||!s.pendingBank)return;const pb=s.pendingBank;
+      if(act==="bankApprove"){BANKF.forEach(([k,l])=>{if((s[k]||"")!==(pb.data[k]||"")){log(s.id,s.name,"Bank: "+l,s[k]||"—",pb.data[k]||"—");s[k]=pb.data[k]}});log(s.id,s.name,"Bank change approved",undefined,"Requested by "+pb.by)}
+      else log(s.id,s.name,act==="bankReject"?"Bank change rejected":"Bank change withdrawn",undefined,"Requested by "+pb.by);
+      s.pendingBank=null;save();renderAll();return;}
+    case"approve":case"unapprove":case"pay":case"unpay":{
+      const o=getInst(b);if(!o)return;const{f,x,it}=o,p=x.pay,lbl=supName(it.sup)+" · "+inr(x.amount);
+      if(act==="pay"){const inp=document.getElementById(`pr-${f.id}-${x.id}`),ref=inp?inp.value.trim():"";
+        if(!ref){if(inp){inp.placeholder="Enter the payment ref first";inp.focus()}return}
+        x.pay=Object.assign({},p,{st:"paid",payBy:who(),ref,paidAt:today()});log(f.id,f.id,"Supplier paid",undefined,lbl+" · "+ref)}
+      if(act==="approve"){x.pay={st:"approved",by:who(),at:today()};log(f.id,f.id,"Supplier payment approved",undefined,lbl+" · pay by "+fdate(x.due))}
+      if(act==="unapprove"){x.pay={st:"open"};log(f.id,f.id,"Supplier payment approval cancelled",undefined,lbl)}
+      if(act==="unpay"){x.pay={st:"approved",by:p.by,at:p.at};log(f.id,f.id,"Supplier payment marked unpaid",undefined,lbl)}
+      save();renderAll();return;}
+  }
+  const f=cur();if(!f)return;
+  if(act==="submit"){
+    const blk=missing(f).filter(m=>m.block);
+    if(blk.length){submitErr=blk.map(m=>m.label);renderAll();const d=$(".draft");if(d)d.scrollIntoView({behavior:"smooth",block:"center"});return}
+    f.submitted=true;submitErr=null;log(f.id,f.id,"Booking submitted",undefined,SERVICES[f.service].label);save();renderAll();
+    toast("Submitted. Operations and Accounts can now see this booking.");return}
+  if(act==="reqDone"){const r=(f.requests||[]).find(x=>x.id===b.dataset.id);if(!r)return;r.done=true;r.doneBy=who();r.doneAt=today();log(f.id,f.id,"Information request done",undefined,r.text);save();renderAll();toast("Marked done. "+r.by+" will see it.");return}
+  if(act==="askSales"){const t=($("#rq-text").value||"").trim();if(!t){$("#rq-text").focus();return}
+    f.requests=f.requests||[];f.requests.push({id:uid("q"),text:t,by:who(),role:ROLES[role].label,at:today(),done:false});log(f.id,f.id,"Asked Sales for information",undefined,t);save();renderAll();toast("Sent to Sales.");return}
+  if(act==="fare"){const v=b.dataset.v;if(f.fareType===v)return;log(f.id,f.id,"Fare type",f.fareType==="group"?"Group fare":"Portal fare",v==="group"?"Group fare":"Portal fare");f.fareType=v;
+    if(v==="group"&&f.ticket.issuedBy==="Booking staff")f.ticket.issuedBy="Reservation Head";if(v==="portal"&&f.ticket.issuedBy!=="Booking staff"&&f.ticket.status!=="Issued")f.ticket.issuedBy="Booking staff";
+    if(!f.single.sup||!singleCfg(f).types.includes((supById(f.single.sup)||{}).type))f.single.sup="";save();renderAll();return}
+  if(act==="mode"){if(f.costMode===b.dataset.m)return;log(f.id,f.id,"Supply method",f.costMode==="single"?"Through DMC":"Self DMC",b.dataset.m==="single"?"Through DMC":"Self DMC");f.costMode=b.dataset.m;f.schedule=[];save();renderAll();return}
+  if(act==="addLine"){const def={visa:"Visa fees",hotel:"Hotels / Airbnb"}[f.service]||"Flights";const l={id:uid("L"),cat:def,sup:"",ref:"",amount:0};f.lines.push(l);log(f.id,f.id,"Cost line added",undefined,def);save();renderAll();const n=$("#x-l-"+l.id+"-sup");if(n)n.focus();return}
+  if(act==="delLine"){const i=f.lines.findIndex(l=>l.id===b.dataset.id);if(i<0||itemLocked(f,b.dataset.id))return;const l=f.lines[i];f.lines.splice(i,1);f.schedule=f.schedule.filter(x=>x.item!==l.id);log(f.id,f.id,"Cost line removed",undefined,l.cat+" · "+inr(l.amount));save();renderAll();return}
+  if(act==="addSch"){const itemId=$("#ns-item").value,it=itemOf(f,itemId);if(!it)return;
+    const due=$("#ns-due").value;if(!due){$("#ns-due").focus();return}
+    let amt=+$("#ns-amt").value;if(!amt)amt=Math.max(0,(it.amount||0)-sum(f.schedule.filter(x=>x.item===itemId),x=>x.amount));
+    if(!amt){$("#ns-amt").placeholder="Already fully scheduled";$("#ns-amt").focus();return}
+    f.schedule.push({id:uid("i"),item:itemId,amount:amt,due,pay:P()});log(f.id,f.id,"Payment date added",undefined,supName(it.sup)+" · "+inr(amt)+" · pay by "+fdate(due));save();renderAll();return}
+  if(act==="delSch"){const x=f.schedule.find(y=>y.id===b.dataset.id);if(!x||x.pay.st!=="open")return;const it=itemOf(f,x.item);f.schedule=f.schedule.filter(y=>y!==x);log(f.id,f.id,"Payment date removed",undefined,(it?supName(it.sup):"")+" · "+inr(x.amount));save();renderAll();return}
+  if(act==="addReceipt"){const amt=+$("#nr-amt").value;if(!amt){$("#nr-amt").placeholder="Enter the amount";$("#nr-amt").focus();return}
+    const r={date:$("#nr-date").value||today(),amount:amt,mode:$("#nr-mode").value,ref:$("#nr-ref").value.trim(),verified:false,by:who()};f.receipts.push(r);
+    log(f.id,f.id,"Client payment added",undefined,inr(amt)+" · "+r.mode+(r.ref?" · "+r.ref:""));save();renderAll();toast("Payment added. Accounts will verify it.");return}
+});
+
+$("#backup-local").onclick=async()=>{
+  if(dirtyEls().length){alert("Save or discard your current edits first.");return;}
+  const data=new Blob([JSON.stringify({format:"romford-bookings-pc-v1",records:S},null,2)],{type:"application/json"});
+  await DL.save({filename:"Romford_Bookings_Backup_"+new Date().toISOString().slice(0,10)+".json",data});
+  toast("Backup downloaded.");
+};
+$("#restore-local").onclick=()=>{
+  if(dirtyEls().length){alert("Save or discard your current edits first.");return;}
+  $("#backup-file").click();
+};
+$("#backup-file").onchange=async e=>{
+  const file=e.target.files[0];
+  e.target.value="";
+  if(!file)return;
+  try{
+    const copy=JSON.parse(await file.text()), records=copy.records;
+    if(copy.format!=="romford-bookings-pc-v1"||!records||!["files","suppliers","log"].every(k=>Array.isArray(records[k])))throw Error("Choose a backup made by Romford Bookings PC.");
+    if(!confirm("Replace the current records with this backup?"))return;
+    localStorage.setItem(KEY,JSON.stringify(records));
+    location.reload();
+  }catch(error){alert(error.message);}
+};
+document.addEventListener("change",e=>{if(e.target.id==="preview-role"){const b=document.querySelector('#roles [data-r="'+e.target.value+'"]');if(b)b.click()}});
+{const y0=restoreNav();renderAll();go(y0);}
+})();
+</script>
+
+</body></html>
